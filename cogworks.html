@@ -1,0 +1,2412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>COGWORKS — Automation Engine</title>
+<style>
+  :root{
+    --bg:#0d1116; --bg2:#111820; --panel:#151d27; --panel2:#1b2531;
+    --line:#243040; --line2:#33475e; --rivet:#3d5673;
+    --ink:#cdd9e6; --dim:#7f92a6; --faint:#54687d;
+    --amber:#ffb02e; --amber-d:#8a5c10; --cyan:#43cdd6; --cyan-d:#1c6f76;
+    --green:#5ed07f; --red:#e2594f; --violet:#a476e0;
+    --mono: ui-monospace, "JetBrains Mono", "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+  }
+  *{box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent;}
+  html,body{height:100%; overflow:hidden; background:var(--bg); color:var(--ink);
+    font-family:var(--mono); font-size:13px; user-select:none;}
+  canvas{display:block; position:absolute; inset:0; cursor:crosshair; touch-action:none;}
+
+  /* ---------- HUD frame ---------- */
+  .hud{position:absolute; inset:0; pointer-events:none; z-index:5;}
+  .hud > *{pointer-events:auto;}
+
+  /* Top bar */
+  #topbar{position:absolute; top:0; left:0; right:0; height:46px;
+    display:flex; align-items:center; gap:0; padding:0 12px;
+    background:linear-gradient(180deg,rgba(18,25,33,.96),rgba(14,19,25,.9));
+    border-bottom:1px solid var(--line2);}
+  .brand{display:flex; align-items:baseline; gap:9px; padding-right:16px; margin-right:14px;
+    border-right:1px solid var(--line);}
+  .brand b{font-size:17px; letter-spacing:4px; color:var(--amber);
+    text-shadow:0 0 14px rgba(255,176,46,.35); font-weight:800;}
+  .brand span{font-size:9px; letter-spacing:3px; color:var(--faint); text-transform:uppercase;}
+  .res-strip{display:flex; gap:14px; flex:1; overflow-x:auto; scrollbar-width:none;}
+  .res-strip::-webkit-scrollbar{display:none;}
+  .res{display:flex; align-items:center; gap:6px; white-space:nowrap;}
+  .res .sw{width:12px; height:12px; border-radius:3px; border:1px solid rgba(0,0,0,.4);
+    box-shadow:inset 0 0 3px rgba(255,255,255,.15);}
+  .res .n{color:var(--dim); font-size:11px;}
+  .res .v{color:var(--ink); font-variant-numeric:tabular-nums; min-width:22px; text-align:right;}
+  .topbtns{display:flex; gap:6px; padding-left:12px; border-left:1px solid var(--line); margin-left:8px;}
+  .tbtn{background:var(--panel2); border:1px solid var(--line2); color:var(--dim);
+    font-family:var(--mono); font-size:11px; letter-spacing:1px; padding:5px 9px; border-radius:5px;
+    cursor:pointer; transition:.12s;}
+  .tbtn:hover{color:var(--ink); border-color:var(--rivet);}
+  .tbtn.on{color:var(--bg); background:var(--amber); border-color:var(--amber);}
+
+  /* Research bar */
+  #research{position:absolute; top:52px; right:12px; width:270px; padding:9px 11px;
+    background:linear-gradient(180deg,rgba(21,29,39,.95),rgba(16,22,30,.95));
+    border:1px solid var(--line2); border-radius:8px;
+    box-shadow:0 8px 24px rgba(0,0,0,.45);}
+  #research .hd{display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;}
+  #research .hd b{color:var(--cyan); letter-spacing:2px; font-size:11px; text-transform:uppercase;}
+  #research .hd .st{color:var(--faint); font-size:10px;}
+  #research .tech{font-size:12px; color:var(--ink); margin-bottom:2px;}
+  #research .desc{font-size:10px; color:var(--dim); margin-bottom:7px;}
+  .rbar{height:8px; background:#0b0f14; border:1px solid var(--line); border-radius:5px; overflow:hidden;}
+  .rbar i{display:block; height:100%; width:0;
+    background:linear-gradient(90deg,var(--cyan-d),var(--cyan)); transition:width .2s;}
+  #research .cnt{display:flex; justify-content:space-between; margin-top:5px; font-size:10px; color:var(--faint);}
+
+  /* Objective box */
+  #objective{position:absolute; right:12px; top:214px; width:270px; padding:9px 11px;
+    background:linear-gradient(180deg,rgba(24,23,33,.95),rgba(17,16,24,.95));
+    border:1px solid var(--line2); border-radius:8px;
+    box-shadow:0 8px 24px rgba(0,0,0,.45);}
+  #objective .hd{display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;}
+  #objective .hd b{color:#e0b040; letter-spacing:2px; font-size:11px; text-transform:uppercase;}
+  #objective .hd .st{color:var(--faint); font-size:10px;}
+  #objective .tech{font-size:12px; color:var(--ink); margin-bottom:2px;}
+  #objective .desc{font-size:10px; color:var(--dim); margin-bottom:7px;}
+  #objective .rbar i{background:linear-gradient(90deg,#a67d1e,#e0b040);}
+
+  /* Readout (bottom-left) */
+  #readout{position:absolute; left:12px; bottom:92px; min-width:180px; max-width:240px;
+    background:rgba(14,20,27,.92); border:1px solid var(--line); border-radius:7px;
+    padding:8px 10px; font-size:11px; line-height:1.5; color:var(--dim);}
+  #readout b{color:var(--ink);}
+  #readout .k{color:var(--faint);}
+
+  /* Hotbar */
+  #hotbar{position:absolute; left:50%; bottom:14px; transform:translateX(-50%);
+    display:flex; gap:6px; padding:8px; border-radius:12px; max-width:94vw; overflow-x:auto;
+    background:linear-gradient(180deg,rgba(20,28,38,.96),rgba(13,18,24,.96));
+    border:1px solid var(--line2); box-shadow:0 10px 30px rgba(0,0,0,.5);}
+  .slot{position:relative; width:62px; height:66px; flex:none; border-radius:8px; cursor:pointer;
+    background:#0f151d; border:1px solid var(--line); transition:.1s; overflow:hidden;}
+  .slot:hover{border-color:var(--rivet); background:#131b25;}
+  .slot.sel{border-color:var(--amber); box-shadow:0 0 0 1px var(--amber),0 0 16px rgba(255,176,46,.25);}
+  .slot.sel.del{border-color:var(--red); box-shadow:0 0 0 1px var(--red),0 0 16px rgba(226,89,79,.25);}
+  .slot .key{position:absolute; top:3px; left:5px; font-size:9px; color:var(--faint);}
+  .slot .ct{position:absolute; top:3px; right:5px; font-size:10.5px; color:var(--ink);
+    font-variant-numeric:tabular-nums;}
+  .slot .ct.zero{color:var(--red);}
+  .slot .lbl{position:absolute; bottom:4px; left:0; right:0; font-size:8px; letter-spacing:.3px;
+    color:var(--dim); text-transform:uppercase; text-align:center; line-height:1; white-space:nowrap;
+    overflow:hidden; text-overflow:ellipsis; padding:0 2px;}
+  .slot canvas{position:absolute; top:16px; left:50%; transform:translateX(-50%);
+    width:28px; height:28px; image-rendering:pixelated;}
+
+  /* Generic floating panels */
+  .panel{position:absolute; background:linear-gradient(180deg,rgba(22,30,40,.98),rgba(15,21,29,.98));
+    border:1px solid var(--line2); border-radius:10px; box-shadow:0 16px 44px rgba(0,0,0,.6);
+    z-index:20;}
+  .panel .ph{display:flex; justify-content:space-between; align-items:center; padding:11px 14px;
+    border-bottom:1px solid var(--line);}
+  .panel .ph b{letter-spacing:2px; text-transform:uppercase; font-size:12px; color:var(--amber);}
+  .panel .x{cursor:pointer; color:var(--faint); font-size:15px; line-height:1; padding:2px 4px;}
+  .panel .x:hover{color:var(--red);}
+  .panel .pb{padding:12px 14px; max-height:70vh; overflow-y:auto;}
+
+  /* Inventory / crafting */
+  #inv{left:50%; top:50%; transform:translate(-50%,-50%); width:min(680px,94vw);
+    max-height:88vh; overflow-y:auto;}
+  .sect-title{font-size:10px; letter-spacing:2px; text-transform:uppercase; color:var(--faint);
+    margin:4px 0 8px;}
+  .invgrid{display:grid; grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:6px; margin-bottom:16px;}
+  .icell{display:flex; align-items:center; gap:8px; padding:6px 8px; background:#0f151d;
+    border:1px solid var(--line); border-radius:6px;}
+  .icell .sw{width:16px; height:16px; border-radius:4px; flex:none;
+    box-shadow:inset 0 0 3px rgba(255,255,255,.15);}
+  .icell .nm{font-size:10.5px; color:var(--dim); line-height:1.15; flex:1;}
+  .icell .qt{font-size:12px; color:var(--ink); font-variant-numeric:tabular-nums;}
+  .craftgrid{display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:7px;}
+  .craft{padding:8px 9px; background:#0f151d; border:1px solid var(--line); border-radius:7px; cursor:pointer;
+    transition:.1s;}
+  .craft:hover{border-color:var(--rivet); background:#131c26;}
+  .craft.no{opacity:.42; cursor:not-allowed;}
+  .craft .top{display:flex; align-items:center; gap:7px; margin-bottom:5px;}
+  .craft .top .sw{width:15px; height:15px; border-radius:4px;}
+  .craft .top b{font-size:11.5px; color:var(--ink); flex:1;}
+  .craft .top .out{font-size:10px; color:var(--green);}
+  .craft .ing{font-size:9.5px; color:var(--faint); line-height:1.5;}
+  .craft .ing .ok{color:var(--dim);}
+  .craft .ing .bad{color:var(--red);}
+
+  /* Machine detail panel — left column has the most vertical room */
+  #detail{left:12px; top:64px; width:252px; max-height:calc(100vh - 290px); overflow-y:auto;}
+  .mstat{font-size:12px; font-weight:600; margin-bottom:8px; padding:4px 8px;
+    background:#0f151d; border:1px solid var(--line); border-radius:5px;}
+  .btnrow{display:flex; flex-wrap:wrap; gap:5px; margin-top:8px;}
+  .mini{font-family:var(--mono); font-size:10px; padding:4px 8px; border-radius:5px;
+    background:#0f151d; border:1px solid var(--line2); color:var(--dim); cursor:pointer;}
+  .mini:hover{border-color:var(--rivet); color:var(--ink);}
+  .mini.off{opacity:.35; cursor:not-allowed;}
+  .mini .sw{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:4px;vertical-align:-1px;}
+  .drow{display:flex; align-items:center; gap:8px; padding:5px 0; font-size:11px; border-bottom:1px solid rgba(38,48,64,.5);}
+  .drow:last-child{border-bottom:none;}
+  .drow .sw{width:14px; height:14px; border-radius:4px; flex:none;}
+  .drow .lb{color:var(--faint); flex:1;}
+  .drow .vl{color:var(--ink); font-variant-numeric:tabular-nums;}
+  .pbar{height:6px; background:#0b0f14; border:1px solid var(--line); border-radius:4px; overflow:hidden; margin:8px 0 4px;}
+  .pbar i{display:block; height:100%; background:linear-gradient(90deg,var(--amber-d),var(--amber));}
+  .rchoose{display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-top:4px;}
+  .rc{display:flex; align-items:center; gap:6px; padding:6px 7px; background:#0f151d; border:1px solid var(--line);
+    border-radius:6px; cursor:pointer; font-size:10px; color:var(--dim);}
+  .rc:hover{border-color:var(--rivet); color:var(--ink);}
+  .rc.on{border-color:var(--cyan); color:var(--cyan);}
+  .rc .sw{width:13px; height:13px; border-radius:3px;}
+
+  /* Minimap */
+  #mini{position:fixed; right:12px; bottom:14px; padding:5px; z-index:40;
+    width:168px; height:168px;
+    background:rgba(13,18,24,.92); border:1px solid var(--line2); border-radius:9px;
+    box-shadow:0 8px 24px rgba(0,0,0,.45);}
+  #mini canvas{display:block; width:158px; height:158px; image-rendering:pixelated;
+    cursor:pointer; border-radius:5px;}
+
+  /* Vignette */
+  #vig{position:absolute; inset:0; pointer-events:none; z-index:3;
+    background:radial-gradient(ellipse at 50% 42%, transparent 52%, rgba(3,6,10,.5) 100%);}
+
+  /* World menu */
+  #world{left:50%; top:50%; transform:translate(-50%,-50%); width:min(360px,92vw);
+    max-height:88vh; overflow-y:auto;}
+  .wrow{display:flex; gap:8px; margin-bottom:10px; align-items:center;}
+  .wrow label{font-size:10px; color:var(--faint); letter-spacing:1px; text-transform:uppercase; width:44px;}
+  .winput{flex:1; background:#0d131a; border:1px solid var(--line2); border-radius:6px;
+    color:var(--ink); font-family:var(--mono); font-size:12px; padding:7px 9px; outline:none;}
+  .winput:focus{border-color:var(--amber-d);}
+  .wbtn{display:block; width:100%; margin-top:7px; padding:9px; border-radius:7px;
+    border:1px solid var(--line2); background:#131b25; color:var(--ink);
+    font-family:var(--mono); font-size:11.5px; letter-spacing:1.5px; cursor:pointer; text-transform:uppercase;}
+  .wbtn:hover{border-color:var(--rivet);}
+  .wbtn.warn{border-color:var(--amber-d); color:var(--amber);}
+
+  /* Notifications */
+  #notes{position:absolute; top:56px; left:50%; transform:translateX(-50%);
+    display:flex; flex-direction:column; gap:6px; align-items:center; z-index:30;}
+  .note{padding:8px 16px; border-radius:8px; font-size:12px; letter-spacing:.5px;
+    background:rgba(20,28,38,.96); border:1px solid var(--line2); color:var(--ink);
+    box-shadow:0 6px 20px rgba(0,0,0,.4); animation:pop .3s ease;}
+  .note.ok{border-color:var(--green); color:var(--green);}
+  .note.bad{border-color:var(--red); color:var(--red);}
+  @keyframes pop{from{opacity:0; transform:translateY(-8px);} to{opacity:1; transform:translateY(0);}}
+
+  /* Help + Victory overlays */
+  .overlay{position:absolute; inset:0; z-index:40; display:flex; align-items:center; justify-content:center;
+    background:rgba(6,9,12,.82); backdrop-filter:blur(3px);}
+  .card{width:min(560px,92vw); max-height:92vh; overflow-y:auto;
+    background:linear-gradient(180deg,rgba(23,31,42,.99),rgba(14,20,28,.99));
+    border:1px solid var(--line2); border-radius:14px; padding:26px 28px; box-shadow:0 24px 60px rgba(0,0,0,.7);}
+  .card h1{font-size:22px; letter-spacing:6px; color:var(--amber); margin-bottom:4px;
+    text-shadow:0 0 20px rgba(255,176,46,.4);}
+  .card .sub{color:var(--faint); font-size:10px; letter-spacing:3px; text-transform:uppercase; margin-bottom:18px;}
+  .card p{color:var(--dim); font-size:12.5px; line-height:1.7; margin-bottom:10px;}
+  .card .keys{display:grid; grid-template-columns:1fr 1fr; gap:6px 20px; margin:14px 0;}
+  .card .keys div{font-size:11.5px; color:var(--dim);}
+  .card kbd{background:#0e141c; border:1px solid var(--line2); border-bottom-width:2px; border-radius:4px;
+    padding:1px 6px; color:var(--ink); font-family:var(--mono); font-size:10.5px; margin-right:4px;}
+  .card .go{margin-top:18px; width:100%; padding:12px; border-radius:9px; border:1px solid var(--amber);
+    background:var(--amber); color:#0d1116; font-family:var(--mono); font-weight:700; letter-spacing:3px;
+    font-size:13px; cursor:pointer; text-transform:uppercase;}
+  .card .go:hover{filter:brightness(1.08);}
+  .card .go.win{border-color:var(--green); background:var(--green);}
+
+  @media (max-width:640px){
+    .slot{width:52px; height:58px;} .slot canvas{width:24px;height:24px;top:14px;}
+    .slot .lbl{bottom:3px;}
+    #hotbar{max-width:96vw; overflow-x:auto; justify-content:flex-start;}
+    #research{width:200px;} .res .n{display:none;}
+    #objective{width:200px; top:206px;} #detail{left:8px; top:56px; width:190px; max-height:calc(100vh - 250px);}
+    #readout{bottom:96px; max-width:180px;}
+    #mini{bottom:88px; width:114px; height:114px;} #mini canvas{width:104px; height:104px;}
+    .tbtn{padding:5px 6px; font-size:10px; letter-spacing:0;}
+    .brand span{display:none;} .brand{padding-right:8px; margin-right:8px;}
+  }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="vig"></div>
+
+<div class="hud">
+  <div id="topbar">
+    <div class="brand"><b>COGWORKS</b><span>Automation Engine</span></div>
+    <div class="res-strip" id="resStrip"></div>
+    <div class="topbtns">
+      <button class="tbtn" id="btnRot" title="Rotate placement (R)">⟳ ROT</button>
+      <button class="tbtn" id="btnWorld">⚙ WORLD</button>
+      <button class="tbtn" id="btnPause">⏸ PAUSE</button>
+      <button class="tbtn" id="btnInv">☰ CRAFT <span style="color:var(--faint)">E</span></button>
+      <button class="tbtn" id="btnHelp">? HELP</button>
+    </div>
+  </div>
+
+  <div id="research">
+    <div class="hd"><b>Research</b><span class="st" id="rStatus">Feed a Lab</span></div>
+    <div class="tech" id="rTech">—</div>
+    <div class="desc" id="rDesc"></div>
+    <div class="rbar"><i id="rFill"></i></div>
+    <div class="cnt"><span id="rCount">0 / 0 packs</span><span id="rBonus"></span></div>
+    <div class="cnt" style="margin-top:6px;border-top:1px solid var(--line);padding-top:6px">
+      <span>⚡ Power</span><span id="pwr">—</span></div>
+  </div>
+
+  <div id="objective">
+    <div class="hd"><b>Objective</b><span class="st" id="obStep"></span></div>
+    <div class="tech" id="obName">—</div>
+    <div class="desc" id="obDesc"></div>
+    <div class="rbar"><i id="obFill"></i></div>
+  </div>
+
+  <div id="readout">
+    <div><span class="k">tile</span> <b id="roCoord">—</b></div>
+    <div><span class="k">ground</span> <b id="roGround">—</b></div>
+    <div><span class="k">object</span> <b id="roObj">—</b></div>
+    <div style="margin-top:5px; color:var(--faint); font-size:10px;" id="roHint"></div>
+  </div>
+
+  <div id="hotbar"></div>
+
+  <div id="notes"></div>
+
+  <div id="mini"><canvas id="miniCv" width="224" height="224"></canvas></div>
+</div>
+
+<input type="file" id="loadFile" accept=".json,application/json" style="display:none">
+
+<script>
+"use strict";
+/* ============================================================
+   COGWORKS — a Factorio-style automation game
+   Single-file build. Vanilla JS + Canvas.
+   ============================================================ */
+
+// ----------------------------- Config -----------------------------
+const WORLD_W = 224, WORLD_H = 224;
+const TILE = 36;                 // world pixels per tile
+const TPS = 30, DT = 1/TPS;      // fixed logic step
+const DIRV = [[0,-1],[1,0],[0,1],[-1,0]]; // N,E,S,W  (facing = output side)
+const DIRNAME = ['N','E','S','W'];
+
+// tuning
+const BELT_TPS_BASE = 1.9;       // tiles per second a belt moves
+const BELT_SPACING  = 0.26;      // min gap between items on a belt
+const MINE_TIME     = 1.0;       // seconds per ore
+const COAL_FUEL_SEC = 4.0;       // burn seconds per coal (furnaces)
+const INS_SWING     = 0.42;      // inserter swing seconds
+const LAB_PACK_SEC  = 2.4;       // seconds to consume packs
+const GEN_POWER     = 60;        // kW per steam generator
+const GEN_FUEL_SEC  = 10;        // burn seconds per coal (generators)
+const SOLAR_POWER   = 30;        // kW per solar panel (fuel-free)
+const POW_ASM=10, POW_LAB=12, POW_EDRILL=8, POW_EFURN=14; // kW demand
+const ROCKET_REQ    = 40;        // rocket parts to launch
+const MINER_BUF=8, FURN_IN=8, FURN_FUEL=8, OUT_CAP=12, ASM_STACKS=4, LAB_CAP=12;
+
+// runtime multipliers (boosted by research)
+let miningMult=1, logisticsMult=1, craftingMult=1, smeltMult=1, genOutputMult=1;
+let powerDemand=0, powerSupply=0, powerEff=1;
+
+// ----------------------------- Items -----------------------------
+const ITEMS = {
+  'iron-ore':      {name:'Iron ore',    c:'#8ba4c6'},
+  'copper-ore':    {name:'Copper ore',  c:'#cf7d43'},
+  'coal':          {name:'Coal',        c:'#454b54', dark:true},
+  'stone':         {name:'Stone',       c:'#b7a985'},
+  'iron-plate':    {name:'Iron plate',  c:'#c3ccd8'},
+  'copper-plate':  {name:'Copper plate',c:'#e08b4f'},
+  'steel-plate':   {name:'Steel plate', c:'#9aa8bc'},
+  'stone-brick':   {name:'Stone brick', c:'#9c917a'},
+  'iron-gear-wheel':{name:'Iron gear',  c:'#8993a2'},
+  'copper-cable':  {name:'Copper cable',c:'#e0a466'},
+  'electronic-circuit':{name:'Circuit', c:'#57b26a'},
+  'advanced-circuit':{name:'Adv circuit', c:'#d05a5a'},
+  'automation-science-pack':{name:'Red science',c:'#e05656'},
+  'logistics-science-pack':{name:'Green science',c:'#5ec27a'},
+  'production-science-pack':{name:'Blue science',c:'#4aa8e0'},
+  'rocket-part':   {name:'Rocket part', c:'#e0b040'},
+  'transport-belt':{name:'Belt',        c:'#c9a23a', b:'belt'},
+  'fast-transport-belt':{name:'Fast belt',c:'#e05656', b:'belt', tier:2},
+  'splitter':      {name:'Splitter',    c:'#c9a23a', b:'splitter'},
+  'burner-mining-drill':{name:'Drill',  c:'#cf8b3a', b:'miner'},
+  'electric-mining-drill':{name:'Elec drill',c:'#43a8cf', b:'miner', electric:true},
+  'stone-furnace': {name:'Furnace',     c:'#cf8b5a', b:'furnace'},
+  'steel-furnace': {name:'Steel furnace',c:'#8a94a4', b:'furnace', speed:2},
+  'electric-furnace':{name:'Electric furnace',c:'#5ec2b0', b:'furnace', speed:3, electric:true},
+  'inserter':      {name:'Inserter',    c:'#cf5050', b:'inserter'},
+  'fast-inserter': {name:'Fast inserter',c:'#4aa8e0', b:'inserter', fast:true},
+  'long-handed-inserter':{name:'Long inserter',c:'#c98adf', b:'inserter', reach:2},
+  'assembling-machine':{name:'Assembler',c:'#4a90cf', b:'assembler'},
+  'wooden-chest':  {name:'Chest',       c:'#b98a4a', b:'chest'},
+  'steam-engine':  {name:'Steam gen',   c:'#c9a23a', b:'generator'},
+  'solar-panel':   {name:'Solar panel', c:'#4a7ad0', b:'generator', solar:true},
+  'lab':           {name:'Lab',         c:'#9569cf', b:'lab'},
+  'rocket-silo':   {name:'Rocket silo', c:'#d0d8e4', b:'silo'},
+};
+const SMELTABLE = {'iron-ore':1,'copper-ore':1,'stone':1};
+const SMELT_TO  = {'iron-ore':'iron-plate','copper-ore':'copper-plate','stone':'stone-brick',
+                   'iron-plate':'steel-plate'};
+
+// ----------------------------- Recipes -----------------------------
+const RECIPES = {
+  'iron-plate':   {cat:'smelt', in:{'iron-ore':1},   out:{'iron-plate':1},   t:2.0},
+  'copper-plate': {cat:'smelt', in:{'copper-ore':1}, out:{'copper-plate':1}, t:2.0},
+  'stone-brick':  {cat:'smelt', in:{'stone':2},      out:{'stone-brick':1},  t:2.0},
+  'steel-plate':  {cat:'smelt', in:{'iron-plate':5}, out:{'steel-plate':1},  t:8.0},
+
+  'iron-gear-wheel':   {cat:'craft', in:{'iron-plate':2}, out:{'iron-gear-wheel':1}, t:0.5},
+  'copper-cable':      {cat:'craft', in:{'copper-plate':1}, out:{'copper-cable':2}, t:0.5},
+  'electronic-circuit':{cat:'craft', in:{'iron-plate':1,'copper-cable':3}, out:{'electronic-circuit':1}, t:0.6},
+  'advanced-circuit':  {cat:'craft', in:{'electronic-circuit':2,'copper-cable':2}, out:{'advanced-circuit':1}, t:1.5},
+  'automation-science-pack':{cat:'craft', in:{'copper-plate':1,'iron-gear-wheel':1}, out:{'automation-science-pack':1}, t:1.0},
+  'logistics-science-pack':{cat:'craft', in:{'transport-belt':1,'inserter':1}, out:{'logistics-science-pack':1}, t:1.5},
+  'production-science-pack':{cat:'craft', in:{'advanced-circuit':1,'iron-gear-wheel':2}, out:{'production-science-pack':1}, t:2.0},
+  'rocket-part':       {cat:'craft', in:{'steel-plate':3,'electronic-circuit':3,'copper-plate':2}, out:{'rocket-part':1}, t:3.0},
+
+  'transport-belt':    {cat:'craft', in:{'iron-plate':1,'iron-gear-wheel':1}, out:{'transport-belt':2}, t:0.5},
+  'fast-transport-belt':{cat:'craft', in:{'transport-belt':1,'iron-gear-wheel':2}, out:{'fast-transport-belt':1}, t:0.6},
+  'splitter':          {cat:'craft', in:{'transport-belt':2,'electronic-circuit':3,'iron-plate':4}, out:{'splitter':1}, t:1.0},
+  'burner-mining-drill':{cat:'craft', in:{'iron-gear-wheel':3,'iron-plate':3,'stone':5}, out:{'burner-mining-drill':1}, t:2.0},
+  'electric-mining-drill':{cat:'craft', in:{'iron-plate':10,'iron-gear-wheel':5,'electronic-circuit':3}, out:{'electric-mining-drill':1}, t:2.0},
+  'stone-furnace':     {cat:'craft', in:{'stone':5}, out:{'stone-furnace':1}, t:1.0},
+  'steel-furnace':     {cat:'craft', in:{'steel-plate':6,'stone-brick':10}, out:{'steel-furnace':1}, t:3.0},
+  'electric-furnace':  {cat:'craft', in:{'steel-plate':10,'advanced-circuit':5,'stone-brick':10}, out:{'electric-furnace':1}, t:3.0},
+  'inserter':          {cat:'craft', in:{'iron-plate':1,'iron-gear-wheel':1,'electronic-circuit':1}, out:{'inserter':1}, t:0.5},
+  'fast-inserter':     {cat:'craft', in:{'inserter':1,'electronic-circuit':2}, out:{'fast-inserter':1}, t:0.6},
+  'long-handed-inserter':{cat:'craft', in:{'inserter':1,'iron-gear-wheel':1,'iron-plate':1}, out:{'long-handed-inserter':1}, t:0.6},
+  'assembling-machine':{cat:'craft', in:{'iron-plate':9,'iron-gear-wheel':5,'electronic-circuit':3}, out:{'assembling-machine':1}, t:2.0},
+  'wooden-chest':      {cat:'craft', in:{'iron-plate':2}, out:{'wooden-chest':1}, t:0.5},
+  'steam-engine':      {cat:'craft', in:{'iron-plate':10,'iron-gear-wheel':8,'copper-plate':5}, out:{'steam-engine':1}, t:3.0},
+  'solar-panel':       {cat:'craft', in:{'steel-plate':5,'electronic-circuit':6,'copper-plate':5}, out:{'solar-panel':1}, t:3.0},
+  'lab':               {cat:'craft', in:{'electronic-circuit':10,'iron-gear-wheel':10,'copper-plate':4}, out:{'lab':1}, t:2.0},
+  'rocket-silo':       {cat:'craft', in:{'steel-plate':20,'advanced-circuit':10,'iron-gear-wheel':20,'stone-brick':20}, out:{'rocket-silo':1}, t:6.0},
+};
+// recipes an assembler is allowed to run (filtered by research unlocks in the UI)
+const ASM_RECIPES = ['iron-gear-wheel','copper-cable','electronic-circuit','advanced-circuit',
+  'automation-science-pack','logistics-science-pack','production-science-pack',
+  'transport-belt','fast-transport-belt','inserter','fast-inserter','rocket-part'];
+
+// ----------------------------- Tech tree & unlocks -----------------------------
+const PACK_TYPE={'automation-science-pack':'r','logistics-science-pack':'g','production-science-pack':'b'};
+const PACK_ITEM={r:'automation-science-pack', g:'logistics-science-pack', b:'production-science-pack'};
+const PACK_COLOR={r:'var(--red)', g:'var(--green)', b:'#4aa8e0'};
+const TECHS = [
+  {id:'automation', name:'Automation', cost:{r:12},
+   desc:'+50% mining speed · unlocks Electric Drill',
+   unlock:['electric-mining-drill'], apply(){miningMult*=1.5;}},
+  {id:'steel', name:'Steel Smelting', cost:{r:25},
+   desc:'Furnaces can smelt Steel · unlocks Steel Furnace',
+   unlock:['steel-plate','steel-furnace'], apply(){}},
+  {id:'logsci', name:'Logistics Science', cost:{r:35},
+   desc:'Unlocks green Logistics Science Packs',
+   unlock:['logistics-science-pack'], apply(){}},
+  {id:'splitters', name:'Belt Logistics', cost:{r:25,g:20},
+   desc:'Unlocks Splitters & Long-handed Inserters',
+   unlock:['splitter','long-handed-inserter'], apply(){}},
+  {id:'fastlog', name:'Fast Logistics', cost:{r:30,g:25},
+   desc:'+25% belt speed · unlocks Fast Belts & Inserters',
+   unlock:['fast-transport-belt','fast-inserter'], apply(){logisticsMult*=1.25;}},
+  {id:'power2', name:'Efficient Steam', cost:{r:35,g:35},
+   desc:'Steam generators produce +50% power',
+   unlock:[], apply(){genOutputMult*=1.5;}},
+  {id:'solar', name:'Solar Energy', cost:{r:30,g:40},
+   desc:'Unlocks fuel-free Solar Panels',
+   unlock:['solar-panel'], apply(){}},
+  {id:'advcircuits', name:'Advanced Circuits', cost:{r:40,g:40},
+   desc:'Unlocks Advanced Circuits & the Electric Furnace',
+   unlock:['advanced-circuit','electric-furnace'], apply(){}},
+  {id:'prodsci', name:'Production Science', cost:{r:45,g:45},
+   desc:'Unlocks blue Production Science Packs',
+   unlock:['production-science-pack'], apply(){}},
+  {id:'production', name:'Mass Production', cost:{r:40,g:40,b:25},
+   desc:'+30% assembler & furnace speed',
+   unlock:[], apply(){craftingMult*=1.3; smeltMult*=1.3;}},
+  {id:'rocketry', name:'Rocketry', cost:{r:60,g:60,b:40},
+   desc:'Unlocks the Rocket Silo and Rocket Parts',
+   unlock:['rocket-silo','rocket-part'], apply(){}},
+];
+let research = {index:0, prog:{r:0,g:0,b:0}};
+let victory = false;
+
+function baseUnlocked(){
+  return new Set(['transport-belt','burner-mining-drill','stone-furnace','inserter',
+    'assembling-machine','wooden-chest','lab','steam-engine',
+    'iron-plate','copper-plate','stone-brick','iron-gear-wheel','copper-cable',
+    'electronic-circuit','automation-science-pack']);
+}
+let unlocked=baseUnlocked();
+function recomputeUnlocked(){
+  unlocked=baseUnlocked();
+  for(let i=0;i<research.index&&i<TECHS.length;i++)
+    for(const it of TECHS[i].unlock) unlocked.add(it);
+}
+function techFor(item){
+  for(const t of TECHS) if(t.unlock.includes(item)) return t;
+  return null;
+}
+function checkTechComplete(){
+  if(research.index>=TECHS.length) return;
+  const tech=TECHS[research.index];
+  for(const ty in tech.cost) if(research.prog[ty]<tech.cost[ty]) return;
+  tech.apply();
+  for(const it of tech.unlock) unlocked.add(it);
+  research.index++; research.prog={r:0,g:0,b:0};
+  notify('Research complete: '+tech.name,'ok');
+  buildHotbar(); lastResearch='';
+}
+
+// ----------------------------- Production stats & objectives -----------------------------
+let prodCount={}, totalProd=0, mIndex=0, mAcc=0;
+function addProd(item,n){ prodCount[item]=(prodCount[item]||0)+n; totalProd+=n; }
+const MILESTONES=[
+  {name:'Power up',      desc:'Place a Steam Generator and load it with coal',
+   done:()=>generators.some(g=>!g.solar&&(g.coal>0||g.fuelT>0)), reward:{'transport-belt':12}},
+  {name:'First smelt',   desc:'Produce 15 iron plates', prod:['iron-plate',15], reward:{'coal':30}},
+  {name:'Gear works',    desc:'Produce 20 iron gears', prod:['iron-gear-wheel',20], reward:{'inserter':4}},
+  {name:'Wired in',      desc:'Produce 12 circuits', prod:['electronic-circuit',12], reward:{'transport-belt':15}},
+  {name:'For science',   desc:'Produce 10 red science packs', prod:['automation-science-pack',10], reward:{'coal':40}},
+  {name:'Breakthrough',  desc:'Complete your first research', done:()=>research.index>=1, reward:{'wooden-chest':4}},
+  {name:'Man of steel',  desc:'Produce 8 steel plates', prod:['steel-plate',8], reward:{'stone':40}},
+  {name:'Split decision', desc:'Place a Splitter', done:()=>splitters.length>0, reward:{'transport-belt':20}},
+  {name:'Green science', desc:'Produce 10 green science packs', prod:['logistics-science-pack',10], reward:{'coal':60}},
+  {name:'Here comes the sun', desc:'Place a Solar Panel', done:()=>generators.some(g=>g.solar), reward:{'electronic-circuit':10}},
+  {name:'Advanced tech', desc:'Produce 10 advanced circuits', prod:['advanced-circuit',10], reward:{'coal':80}},
+  {name:'Blue sky',      desc:'Produce 10 blue science packs', prod:['production-science-pack',10], reward:{'steel-plate':20}},
+  {name:'Heavy industry',desc:'Produce 600 items in total', done:()=>totalProd>=600, reward:{'coal':120}},
+  {name:'Rocket science',desc:'Craft a rocket part', prod:['rocket-part',1], reward:{'coal':100}},
+  {name:'Liftoff',       desc:'Deliver '+ROCKET_REQ+' rocket parts to a Silo and launch', done:()=>victory, reward:{}},
+];
+function milestoneDone(m){
+  if(m.prod) return (prodCount[m.prod[0]]||0)>=m.prod[1];
+  return m.done();
+}
+function milestoneTick(dt){
+  mAcc+=dt; if(mAcc<1) return; mAcc=0;
+  if(mIndex>=MILESTONES.length) return;
+  const m=MILESTONES[mIndex];
+  if(milestoneDone(m)){
+    for(const k in m.reward) addInv(k,m.reward[k]);
+    const r=Object.keys(m.reward).map(k=>'+'+m.reward[k]+' '+ITEMS[k].name).join(', ');
+    notify('★ Objective complete: '+m.name+(r?' · '+r:''),'ok');
+    mIndex++; refreshHotbar(); lastStrip='';
+  }
+}
+
+// ----------------------------- World state -----------------------------
+let terrain = [];   // [y][x] = {ore:itemName|null, amount:int, water, gv}
+let grid = [];      // [y][x] = building|null
+let belts=[], miners=[], furnaces=[], assemblers=[], inserters=[], chests=[], labs=[],
+    generators=[], silos=[], splitters=[];
+let inventory = {};
+
+function inWorld(x,y){ return x>=0 && y>=0 && x<WORLD_W && y<WORLD_H; }
+function terrainAt(x,y){ return inWorld(x,y)? terrain[y][x] : null; }
+function buildingAt(x,y){ return inWorld(x,y)? grid[y][x] : null; }
+function invCount(it){ return inventory[it]||0; }
+function addInv(it,n){ inventory[it]=(inventory[it]||0)+n; }
+function takeInv(it,n){ if((inventory[it]||0)>=n){ inventory[it]-=n; return true;} return false; }
+
+// ----- seeded random + value noise -----
+let worldSeed=0;
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);
+  t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function h2u(x,y,s){ let h=(Math.imul(x,374761393)+Math.imul(y,668265263)+Math.imul(s|0,144269))|0;
+  h=Math.imul(h^(h>>>13),1274126177); return ((h^(h>>>16))>>>0)/4294967296; }
+function vnoise(x,y,f,s){ const gx=x*f, gy=y*f, x0=Math.floor(gx), y0=Math.floor(gy);
+  const fx=gx-x0, fy=gy-y0, u=fx*fx*(3-2*fx), v=fy*fy*(3-2*fy);
+  const a=h2u(x0,y0,s), b=h2u(x0+1,y0,s), c=h2u(x0,y0+1,s), d=h2u(x0+1,y0+1,s);
+  return a+(b-a)*u+(c-a)*v+(a-b-c+d)*u*v; }
+function seedFrom(str){ str=String(str).trim();
+  if(/^-?\d+$/.test(str)) return parseInt(str,10)|0;
+  let h=2166136261; for(const ch of str){ h^=ch.codePointAt(0); h=Math.imul(h,16777619); }
+  return h|0; }
+
+// ----- pre-rendered ground layer -----
+const GP=12; // ground canvas pixels per tile
+let groundCanvas=null;
+const GROUND_TONES=['#151f1b','#172119','#131c18','#18231c'];
+
+function genWorld(seed){
+  worldSeed=seed|0;
+  const rng=mulberry32(worldSeed);
+  const cx=WORLD_W>>1, cy=WORLD_H>>1;
+  terrain=[]; grid=[];
+  for(let y=0;y<WORLD_H;y++){
+    terrain[y]=[]; grid[y]=[];
+    for(let x=0;x<WORLD_W;x++){
+      const w=vnoise(x,y,1/10,worldSeed^0x9e37);
+      const water = w>0.67 && Math.hypot(x-cx,y-cy)>15;
+      const gv=Math.min(3, Math.floor(vnoise(x,y,1/6,worldSeed^0xabc1)*4));
+      terrain[y][x]={ore:null,amount:0,water,gv};
+      grid[y][x]=null;
+    }
+  }
+  function blob(bx,by,r,item,rich){
+    for(let y=Math.floor(by-r-1);y<=Math.ceil(by+r+1);y++)
+      for(let x=Math.floor(bx-r-1);x<=Math.ceil(bx+r+1);x++){
+        if(!inWorld(x,y)) continue;
+        const t=terrain[y][x];
+        if(t.water) continue;
+        if(Math.hypot(x-cx,y-cy)<5) continue;   // keep spawn area buildable
+        const jitter=(vnoise(x,y,1/2.5,worldSeed^0x7777)-0.5)*2.4;
+        const d=Math.hypot(x-bx,y-by)+jitter;
+        if(d<=r){
+          const amt=Math.floor(rich*(1-Math.max(0,d)/(r+0.5))*(0.65+rng()*0.7));
+          if(amt>0 && (!t.ore||t.amount<amt)){ t.ore=item; t.amount=amt; }
+        }
+      }
+  }
+  // four guaranteed patches ringing the spawn at random angles
+  const baseAng=rng()*6.283;
+  ['iron-ore','copper-ore','coal','stone'].forEach((item,i)=>{
+    const a=baseAng+i*1.5708+(rng()-0.5)*0.6;
+    const d=8.5+rng()*3;
+    blob(cx+Math.cos(a)*d, cy+Math.sin(a)*d, 3.6+rng()*1.4, item, 1400+rng()*900);
+  });
+  // scattered patches across the world
+  const types=['iron-ore','copper-ore','coal','stone'];
+  for(let i=0;i<120;i++){
+    const item=types[Math.floor(rng()*types.length)];
+    const x=Math.floor(rng()*WORLD_W), y=Math.floor(rng()*WORLD_H);
+    if(Math.hypot(x-cx,y-cy)<13) continue;
+    blob(x,y,3+rng()*3.5,item,700+rng()*3200);
+  }
+  prerenderGround();
+}
+
+function prerenderGround(){
+  groundCanvas=document.createElement('canvas');
+  groundCanvas.width=WORLD_W*GP; groundCanvas.height=WORLD_H*GP;
+  const g=groundCanvas.getContext('2d');
+  for(let y=0;y<WORLD_H;y++) for(let x=0;x<WORLD_W;x++){
+    const t=terrain[y][x], px=x*GP, py=y*GP;
+    if(t.water){
+      g.fillStyle='#0c1826'; g.fillRect(px,py,GP,GP);
+      // lighter rim where water meets land
+      const land=(dx,dy)=>{ const n=terrainAt(x+dx,y+dy); return n && !n.water; };
+      if(land(0,-1)||land(1,0)||land(0,1)||land(-1,0)){
+        g.fillStyle='#152740'; g.fillRect(px,py,GP,GP);
+        g.fillStyle='#0c1826'; g.fillRect(px+2,py+2,GP-4,GP-4);
+      }
+    } else {
+      g.fillStyle=GROUND_TONES[t.gv]; g.fillRect(px,py,GP,GP);
+      // moss / pebble specks for texture
+      const r1=h2u(x,y,worldSeed^5);
+      if(r1<0.16){ g.fillStyle='#22322a';
+        g.fillRect(px+2+((r1*61)|0)%7, py+2+((r1*97)|0)%7, 3, 2); }
+      else if(r1>0.93){ g.fillStyle='#0f1714';
+        g.fillRect(px+3+((r1*43)|0)%6, py+3+((r1*71)|0)%6, 2, 2); }
+      // dark soil backing under ore patches (ore layout is static)
+      if(t.ore){
+        g.fillStyle='rgba(30,24,14,.75)'; g.fillRect(px,py,GP,GP);
+        g.fillStyle=ITEMS[t.ore].c; g.globalAlpha=0.22; g.fillRect(px,py,GP,GP); g.globalAlpha=1;
+      }
+    }
+  }
+}
+
+// ----------------------------- Building factory -----------------------------
+function makeBuilding(type,x,y,dir,item){
+  const I=ITEMS[item]||{};
+  const b={type,x,y,dir,item};
+  switch(type){
+    case 'belt': b.items=[]; b.anim=Math.random(); b.speed=I.tier||1; break;
+    case 'splitter': b.buffer=null; b.toggle=0; b.anim=Math.random(); break;
+    case 'miner': { const t=terrainAt(x,y); b.oreItem=t?t.ore:null; b.buffer=0;
+      b.timer=MINE_TIME; b.active=false; b.electric=!!I.electric; break; }
+    case 'furnace': b.input={item:null,count:0}; b.coal=0; b.fuelT=0;
+      b.out={item:null,count:0}; b.rec=null; b.prog=0; b.speed=I.speed||1; b.electric=!!I.electric; break;
+    case 'assembler': b.recipe=null; b.inputs={}; b.out={item:null,count:0}; b.prog=0; break;
+    case 'inserter': b.holding=null; b.t=0; b.fast=!!I.fast; b.reach=I.reach||1; break;
+    case 'chest': b.store={}; break;
+    case 'lab': b.packs={r:0,g:0,b:0}; b.timer=0; break;
+    case 'generator': b.coal=0; b.fuelT=0; b.on=false; b.solar=!!I.solar; break;
+    case 'silo': b.parts=0; b.launched=false; break;
+  }
+  return b;
+}
+function listFor(type){
+  return {belt:belts,miner:miners,furnace:furnaces,assembler:assemblers,
+    inserter:inserters,chest:chests,lab:labs,generator:generators,silo:silos,
+    splitter:splitters}[type];
+}
+
+function placeBuilding(item,x,y,dir){
+  if(!inWorld(x,y)) return false;
+  const type=ITEMS[item].b;
+  const existing=grid[y][x];
+  if(existing){
+    if((existing.type==='belt'||existing.type==='splitter') && existing.type===type && existing.item===item){ existing.dir=dir; return true; } // reorient
+    return false;
+  }
+  if(terrain[y][x].water) return false;
+  if(type==='miner'){
+    const t=terrain[y][x];
+    if(!t.ore){ notify('Drills must be placed on an ore patch','bad'); return false; }
+  }
+  if(invCount(item)<=0){ notify('Out of '+ITEMS[item].name,'bad'); return false; }
+  takeInv(item,1);
+  const b=makeBuilding(type,x,y,dir,item);
+  grid[y][x]=b; listFor(type).push(b);
+  return true;
+}
+
+function removeBuilding(x,y){
+  const b=grid[y][x]; if(!b) return false;
+  if(b.item) addInv(b.item,1);
+  // dump stored contents back to inventory
+  if(b.type==='belt') b.items.forEach(it=>addInv(it.item,1));
+  if(b.type==='splitter' && b.buffer) addInv(b.buffer,1);
+  if(b.type==='miner' && b.oreItem) addInv(b.oreItem,b.buffer);
+  if(b.type==='furnace'){ if(b.input.item)addInv(b.input.item,b.input.count); if(b.coal)addInv('coal',b.coal); if(b.out.item)addInv(b.out.item,b.out.count); }
+  if(b.type==='assembler'){ for(const k in b.inputs)addInv(k,b.inputs[k]); if(b.out.item)addInv(b.out.item,b.out.count); }
+  if(b.type==='chest'){ for(const k in b.store)addInv(k,b.store[k]); }
+  if(b.type==='inserter' && b.holding) addInv(b.holding,1);
+  if(b.type==='lab'){ addInv('automation-science-pack',b.packs.r); addInv('logistics-science-pack',b.packs.g); addInv('production-science-pack',b.packs.b); }
+  if(b.type==='generator' && b.coal) addInv('coal',b.coal);
+  if(b.type==='silo' && b.parts) addInv('rocket-part',b.parts);
+  const arr=listFor(b.type); const i=arr.indexOf(b); if(i>=0)arr.splice(i,1);
+  grid[y][x]=null;
+  return true;
+}
+
+// ----------------------------- Item logistics helpers -----------------------------
+function destWant(dest){
+  if(!dest) return null;
+  switch(dest.type){
+    case 'belt': case 'chest': case 'splitter': return null;   // accepts anything
+    case 'furnace':{ const s=new Set(); if(!dest.electric) s.add('coal');
+      if(dest.input.count>0) s.add(dest.input.item);
+      else{ for(const k in SMELTABLE) s.add(k);
+        if(unlocked.has('steel-plate')) s.add('iron-plate'); }
+      return s; }
+    case 'assembler': return dest.recipe? new Set(Object.keys(RECIPES[dest.recipe].in)) : new Set();
+    case 'lab':{ const s=new Set();
+      if(research.index<TECHS.length){ const tech=TECHS[research.index];
+        for(const ty in tech.cost)
+          if(research.prog[ty]<tech.cost[ty] && dest.packs[ty]<LAB_CAP) s.add(PACK_ITEM[ty]); }
+      return s; }
+    case 'generator': return dest.solar? new Set() : new Set(['coal']);
+    case 'silo': return dest.parts<ROCKET_REQ? new Set(['rocket-part']) : new Set();
+    default: return new Set();                            // miner / inserter: no insert
+  }
+}
+function takeFrom(src, want){ // returns item name (removed) or null
+  if(!src) return null;
+  const ok=(it)=> !want || want.has(it);
+  switch(src.type){
+    case 'belt':{ let bi=-1,bp=-1;
+      for(let i=0;i<src.items.length;i++){ const it=src.items[i];
+        if(ok(it.item)&&it.pos>bp){bp=it.pos;bi=i;} }
+      if(bi>=0) return src.items.splice(bi,1)[0].item; return null; }
+    case 'chest':{ for(const k in src.store){ if(src.store[k]>0&&ok(k)){ src.store[k]--; if(!src.store[k])delete src.store[k]; return k; } } return null; }
+    case 'furnace': if(src.out.count>0&&ok(src.out.item)){ const it=src.out.item; if(--src.out.count===0)src.out.item=null; return it; } return null;
+    case 'assembler': if(src.out.count>0&&ok(src.out.item)){ const it=src.out.item; if(--src.out.count===0)src.out.item=null; return it; } return null;
+    case 'miner': if(src.buffer>0&&ok(src.oreItem)){ src.buffer--; return src.oreItem; } return null;
+    case 'splitter': if(src.buffer&&ok(src.buffer)){ const it=src.buffer; src.buffer=null; return it; } return null;
+    default: return null;
+  }
+}
+function doDrop(dest,item){ // returns true if inserted
+  if(!dest) return false;
+  switch(dest.type){
+    case 'belt': if(dest.items.some(it=>it.pos<BELT_SPACING)) return false;
+      dest.items.push({item,pos:0}); return true;
+    case 'splitter': if(dest.buffer===null){ dest.buffer=item; return true; } return false;
+    case 'chest': dest.store[item]=(dest.store[item]||0)+1; return true;
+    case 'furnace':
+      if(item==='coal'){ if(!dest.electric && dest.coal<FURN_FUEL){dest.coal++;return true;} return false; }
+      if(SMELT_TO[item] && (SMELTABLE[item]||unlocked.has('steel-plate'))){
+        if(dest.input.count>0&&dest.input.item!==item) return false;
+        if(dest.input.count<FURN_IN){ dest.input.item=item; dest.input.count++; return true; } }
+      return false;
+    case 'assembler':{ if(!dest.recipe) return false; const rec=RECIPES[dest.recipe];
+      if(!(item in rec.in)) return false;
+      if((dest.inputs[item]||0) < rec.in[item]*ASM_STACKS){ dest.inputs[item]=(dest.inputs[item]||0)+1; return true; }
+      return false; }
+    case 'lab':{ const ty=PACK_TYPE[item];
+      if(ty && dest.packs[ty]<LAB_CAP){ dest.packs[ty]++; return true; } return false; }
+    case 'generator': if(item==='coal'&&!dest.solar&&dest.coal<FURN_FUEL){dest.coal++;return true;} return false;
+    case 'silo': if(item==='rocket-part'&&dest.parts<ROCKET_REQ){dest.parts++;return true;} return false;
+  }
+  return false;
+}
+
+// ----------------------------- Simulation tick -----------------------------
+function asmWants(a){
+  if(!a.recipe) return false;
+  const rec=RECIPES[a.recipe], outName=Object.keys(rec.out)[0];
+  return Object.keys(rec.in).every(k=>(a.inputs[k]||0)>=rec.in[k]) &&
+         a.out.count<OUT_CAP && (a.out.item===null||a.out.item===outName);
+}
+function labWants(l){
+  if(research.index>=TECHS.length) return false;
+  const tech=TECHS[research.index];
+  for(const ty in tech.cost)
+    if(research.prog[ty]<tech.cost[ty] && l.packs[ty]>0) return true;
+  return false;
+}
+function minerWants(m){
+  const t=terrainAt(m.x,m.y);
+  return !!(t && t.ore && t.amount>0 && m.buffer<MINER_BUF);
+}
+function furnaceWantsPower(f){
+  if(!f.electric) return false;
+  const recId = f.rec || (f.input.count>0 ? SMELT_TO[f.input.item] : null);
+  if(!recId) return false;
+  const rec=RECIPES[recId], outName=Object.keys(rec.out)[0];
+  const need=rec.in[f.input.item]||1;
+  return f.input.count>=need && f.out.count<OUT_CAP && (f.out.item===null||f.out.item===outName);
+}
+function computePower(dt){
+  let d=0;
+  for(const a of assemblers) if(asmWants(a)) d+=POW_ASM;
+  for(const l of labs) if(labWants(l)) d+=POW_LAB;
+  for(const m of miners) if(m.electric && minerWants(m)) d+=POW_EDRILL;
+  for(const f of furnaces) if(f.electric && furnaceWantsPower(f)) d+=POW_EFURN;
+  powerDemand=d;
+  let s=0;
+  // solar is fuel-free and always contributes
+  for(const g of generators) if(g.solar){ g.on=true; s+=SOLAR_POWER; }
+  // steam generators burn coal only to cover the remaining demand
+  for(const g of generators){
+    if(g.solar) continue;
+    if(s<d){
+      if(g.fuelT<=0 && g.coal>0){ g.coal--; g.fuelT+=GEN_FUEL_SEC; }
+      if(g.fuelT>0){ g.fuelT-=dt; g.on=true; s+=GEN_POWER*genOutputMult; }
+      else g.on=false;
+    } else g.on=false;   // standby: no demand left to cover, save fuel
+  }
+  powerSupply=Math.round(s);
+  powerEff = d>0? Math.min(1, s/d) : 1;
+}
+
+function tick(){
+  const dt=DT;
+  computePower(dt);
+  for(const f of furnaces) updateFurnace(f,dt);
+  for(const a of assemblers) updateAssembler(a,dt);
+  for(const l of labs) updateLab(l,dt);
+  for(const m of miners) updateMiner(m,dt);
+  for(const ins of inserters) updateInserter(ins,dt);
+  updateBelts(dt);
+  updateSplitters(dt);
+  milestoneTick(dt);
+}
+
+function updateSplitters(dt){
+  const anim=BELT_TPS_BASE*logisticsMult*dt;
+  for(const s of splitters){
+    s.anim=(s.anim+anim)%1;
+    if(s.buffer===null) continue;
+    // outputs: straight ahead (dir) and to the right (dir+1); alternate, prefer the free one
+    const order = s.toggle? [1,0] : [0,1];
+    for(const oi of order){
+      const d = oi===0? s.dir : (s.dir+1)%4;
+      const nb=buildingAt(s.x+DIRV[d][0], s.y+DIRV[d][1]);
+      if(nb && doDrop(nb, s.buffer)){ s.buffer=null; s.toggle^=1; break; }
+    }
+  }
+}
+
+function updateFurnace(f,dt){
+  if(!f.rec && f.input.count>0) f.rec = SMELT_TO[f.input.item];
+  if(!f.rec){ f.working=false; return; }
+  const rec=RECIPES[f.rec], outName=Object.keys(rec.out)[0];
+  const need=rec.in[f.input.item] || 1;
+  const canWork = f.input.count>=need && f.out.count<OUT_CAP &&
+                  (f.out.item===null || f.out.item===outName);
+  if(!canWork){ f.working=false; return; }
+  let rate=0;
+  if(f.electric){ rate = powerEff>0 ? powerEff : 0; }
+  else {
+    if(f.fuelT<=0 && f.coal>0){ f.coal--; f.fuelT+=COAL_FUEL_SEC; }
+    if(f.fuelT>0){ f.fuelT-=dt; rate=1; }
+  }
+  if(rate>0){
+    f.working=true;
+    f.prog += dt*(f.speed||1)*smeltMult*rate/rec.t;
+    if(f.prog>=1){
+      f.prog=0; f.input.count-=need;
+      f.out.item=outName; f.out.count+=rec.out[outName];
+      addProd(outName,rec.out[outName]);
+      if(f.input.count<=0){ f.input.item=null; f.input.count=0; f.rec=null; }
+    }
+  } else f.working=false;
+}
+
+function updateAssembler(a,dt){
+  if(!asmWants(a)){ a.working=false; return; }
+  const rec=RECIPES[a.recipe], outName=Object.keys(rec.out)[0];
+  a.working=powerEff>0;
+  a.prog += dt*craftingMult*powerEff/rec.t;
+  if(a.prog>=1){ a.prog=0;
+    for(const k in rec.in) a.inputs[k]-=rec.in[k];
+    a.out.item=outName; a.out.count+=rec.out[outName];
+    addProd(outName,rec.out[outName]);
+  }
+}
+
+function updateLab(l,dt){
+  if(!labWants(l)){ l.working=false; return; }
+  l.working=powerEff>0;
+  l.timer-=dt*powerEff;
+  if(l.timer<=0){
+    l.timer+=LAB_PACK_SEC;
+    const tech=TECHS[research.index];
+    for(const ty in tech.cost){
+      if(research.prog[ty]<tech.cost[ty] && l.packs[ty]>0){ l.packs[ty]--; research.prog[ty]++; }
+    }
+    checkTechComplete();
+  }
+}
+
+function updateMiner(m,dt){
+  const t=terrainAt(m.x,m.y);
+  if(!m.oreItem && t) m.oreItem=t.ore;
+  // flush buffer to the tile it faces
+  if(m.buffer>0 && m.oreItem){
+    const dx=DIRV[m.dir][0], dy=DIRV[m.dir][1];
+    const dest=buildingAt(m.x+dx,m.y+dy);
+    if(dest && (dest.type==='belt' || buildingAccepts(dest,m.oreItem))){
+      if(doDrop(dest,m.oreItem)) m.buffer--;
+    }
+  }
+  // mine
+  if(minerWants(m)){
+    const rate=miningMult*(m.electric? 2.5*powerEff : 1);
+    m.active=rate>0;
+    m.timer-=dt*rate;
+    if(m.timer<=0){ m.buffer++; t.amount--; m.timer+=MINE_TIME; }
+  } else m.active=false;
+}
+function buildingAccepts(b,item){
+  const w=destWant(b); return w===null || w.has(item);
+}
+
+function updateInserter(ins,dt){
+  const r=ins.reach||1;
+  const dx=DIRV[ins.dir][0], dy=DIRV[ins.dir][1];
+  const src=buildingAt(ins.x-dx*r,ins.y-dy*r);
+  const dest=buildingAt(ins.x+dx*r,ins.y+dy*r);
+  if(ins.holding===null){
+    if(!dest || !src) return;
+    const want=destWant(dest);
+    if(want && want.size===0) return;
+    const got=takeFrom(src,want);
+    if(got){ ins.holding=got; ins.t=0; }
+  } else {
+    ins.t += dt/(INS_SWING/(ins.fast?2:1));
+    if(ins.t>=1){
+      if(dest && doDrop(dest,ins.holding)){ ins.holding=null; ins.t=0; }
+      else ins.t=1; // hold and wait
+    }
+  }
+}
+
+function updateBelts(dt){
+  const base = BELT_TPS_BASE * logisticsMult * dt;
+  // transfer lead items forward
+  for(const b of belts){
+    if(!b.items.length) continue;
+    b.items.sort((p,q)=>q.pos-p.pos);
+    const lead=b.items[0];
+    if(lead.pos>=0.999){
+      const nx=b.x+DIRV[b.dir][0], ny=b.y+DIRV[b.dir][1];
+      const nb=buildingAt(nx,ny);
+      if(nb && nb.type==='belt' && !nb.items.some(it=>it.pos<BELT_SPACING)){
+        b.items.shift(); nb.items.push({item:lead.item,pos:0});
+      } else if(nb && nb.type==='splitter' && nb.buffer===null){
+        nb.buffer=lead.item; b.items.shift();
+      }
+    }
+  }
+  // advance positions (clamp behind item ahead, cap at 1.0)
+  for(const b of belts){
+    b.anim=(b.anim + base*(b.speed||1)) % 1;   // always scroll the track
+    if(!b.items.length) continue;
+    const speed=base*(b.speed||1);
+    b.items.sort((p,q)=>q.pos-p.pos);
+    for(let i=0;i<b.items.length;i++){
+      const it=b.items[i];
+      const cap=(i===0)?1.0:(b.items[i-1].pos-BELT_SPACING);
+      it.pos=Math.max(0,Math.min(it.pos+speed,cap));
+    }
+  }
+}
+
+// ----------------------------- Camera & input -----------------------------
+const cam={x:(WORLD_W>>1)*TILE, y:(WORLD_H>>1)*TILE, zoom:1};
+let mouse={sx:0,sy:0,tx:0,ty:0,down:false,rdown:false,mid:false};
+let lastPaint=null;   // last tile painted during drag
+let paused=false;
+let tool='select';    // 'select' | item name | 'delete'
+let placeDir=1;       // default facing East
+const keys={};
+
+const canvas=document.getElementById('game');
+const ctx=canvas.getContext('2d');
+let DPR=Math.min(window.devicePixelRatio||1,2);
+let W=0,H=0;
+function resize(){
+  DPR=Math.min(window.devicePixelRatio||1,2);
+  W=window.innerWidth; H=window.innerHeight;
+  canvas.width=W*DPR; canvas.height=H*DPR;
+  canvas.style.width=W+'px'; canvas.style.height=H+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+}
+window.addEventListener('resize',resize);
+
+function screenToTile(sx,sy){
+  const wx=(sx-W/2)/cam.zoom+cam.x, wy=(sy-H/2)/cam.zoom+cam.y;
+  return {tx:Math.floor(wx/TILE), ty:Math.floor(wy/TILE)};
+}
+
+canvas.addEventListener('mousemove',e=>{
+  mouse.sx=e.clientX; mouse.sy=e.clientY;
+  const t=screenToTile(e.clientX,e.clientY);
+  mouse.tx=t.tx; mouse.ty=t.ty;
+  if(mouse.mid){ cam.x-=e.movementX/cam.zoom; cam.y-=e.movementY/cam.zoom; }
+  else if(mouse.down) handleDragPaint();
+  else if(mouse.rdown) tryDelete(t.tx,t.ty);
+  updateReadout();
+});
+canvas.addEventListener('mousedown',e=>{
+  const t=screenToTile(e.clientX,e.clientY); mouse.tx=t.tx; mouse.ty=t.ty;
+  if(e.button===1){ mouse.mid=true; e.preventDefault(); return; }
+  if(e.button===2){ mouse.rdown=true; tryDelete(t.tx,t.ty); return; }
+  if(e.button===0){ mouse.down=true; lastPaint=null; handleClick(t.tx,t.ty); }
+});
+window.addEventListener('mouseup',e=>{
+  if(e.button===1)mouse.mid=false;
+  if(e.button===2)mouse.rdown=false;
+  if(e.button===0){mouse.down=false; lastPaint=null;}
+});
+canvas.addEventListener('contextmenu',e=>e.preventDefault());
+function zoomAt(sx,sy,nz){
+  nz=Math.max(0.14,Math.min(2.6,nz));
+  const wx=(sx-W/2)/cam.zoom+cam.x, wy=(sy-H/2)/cam.zoom+cam.y;
+  cam.zoom=nz;
+  cam.x=wx-(sx-W/2)/cam.zoom;
+  cam.y=wy-(sy-H/2)/cam.zoom;
+}
+canvas.addEventListener('wheel',e=>{
+  e.preventDefault();
+  const f=e.deltaY<0?1.12:1/1.12;
+  zoomAt(e.clientX,e.clientY,cam.zoom*f);
+},{passive:false});
+
+// ---- touch: tap = act, one-finger drag = pan, pinch = zoom ----
+let touchState=null;
+canvas.addEventListener('touchstart',e=>{
+  e.preventDefault();
+  if(e.touches.length===1){
+    const t=e.touches[0];
+    touchState={mode:'pan', lastX:t.clientX, lastY:t.clientY,
+      startX:t.clientX, startY:t.clientY, startT:performance.now(), moved:false};
+    const tt=screenToTile(t.clientX,t.clientY);
+    mouse.sx=t.clientX; mouse.sy=t.clientY; mouse.tx=tt.tx; mouse.ty=tt.ty;
+    updateReadout();
+  } else if(e.touches.length===2){
+    const a=e.touches[0], b=e.touches[1];
+    touchState={mode:'pinch',
+      dist:Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY),
+      cx:(a.clientX+b.clientX)/2, cy:(a.clientY+b.clientY)/2};
+  }
+},{passive:false});
+canvas.addEventListener('touchmove',e=>{
+  e.preventDefault(); if(!touchState) return;
+  if(touchState.mode==='pan' && e.touches.length===1){
+    const t=e.touches[0];
+    if(Math.hypot(t.clientX-touchState.startX,t.clientY-touchState.startY)>8) touchState.moved=true;
+    if(touchState.moved){
+      cam.x-=(t.clientX-touchState.lastX)/cam.zoom;
+      cam.y-=(t.clientY-touchState.lastY)/cam.zoom;
+    }
+    touchState.lastX=t.clientX; touchState.lastY=t.clientY;
+    const tt=screenToTile(t.clientX,t.clientY); mouse.tx=tt.tx; mouse.ty=tt.ty;
+  } else if(touchState.mode==='pinch' && e.touches.length===2){
+    const a=e.touches[0], b=e.touches[1];
+    const nd=Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY);
+    const ncx=(a.clientX+b.clientX)/2, ncy=(a.clientY+b.clientY)/2;
+    if(touchState.dist>0) zoomAt(ncx,ncy,cam.zoom*nd/touchState.dist);
+    cam.x-=(ncx-touchState.cx)/cam.zoom;
+    cam.y-=(ncy-touchState.cy)/cam.zoom;
+    touchState.dist=nd; touchState.cx=ncx; touchState.cy=ncy;
+  }
+},{passive:false});
+canvas.addEventListener('touchend',e=>{
+  e.preventDefault();
+  if(touchState && touchState.mode==='pan' && e.touches.length===0){
+    const dt=performance.now()-touchState.startT;
+    if(!touchState.moved && dt<400){
+      const tt=screenToTile(touchState.startX,touchState.startY);
+      mouse.tx=tt.tx; mouse.ty=tt.ty;
+      handleClick(tt.tx,tt.ty); lastPaint=null;
+      refreshHotbar(); updateReadout();
+    }
+  }
+  if(e.touches.length===0) touchState=null;
+},{passive:false});
+
+function handleClick(tx,ty){
+  if(tool==='select'){ selectTile(tx,ty); return; }
+  if(tool==='delete'){ tryDelete(tx,ty); lastPaint={tx,ty}; return; }
+  // Clicking directly on an existing machine inspects it — even while holding a
+  // build tool — so you never have to switch back to the cursor to fuel / pick a recipe.
+  const existing=buildingAt(tx,ty);
+  const beltReorient = existing && existing.type==='belt' && ITEMS[tool] && ITEMS[tool].b==='belt';
+  if(existing && !beltReorient &&
+     ['furnace','assembler','chest','lab','miner','generator','silo'].includes(existing.type)){
+    selected=existing; openDetail(); lastPaint={tx,ty}; return;
+  }
+  // place tool
+  placeBuilding(tool,tx,ty,placeDir);
+  lastPaint={tx,ty};
+  refreshHotbar(); refreshResStrip();
+}
+function handleDragPaint(){
+  const {tx,ty}=mouse;
+  if(lastPaint && lastPaint.tx===tx && lastPaint.ty===ty) return;
+  if(tool==='delete'){ tryDelete(tx,ty); lastPaint={tx,ty}; return; }
+  if(tool==='select'){ return; }
+  // belt drag = auto-orient along the drag path
+  if(tool==='transport-belt' && lastPaint){
+    const ddx=tx-lastPaint.tx, ddy=ty-lastPaint.ty;
+    if(Math.abs(ddx)+Math.abs(ddy)===1){
+      let d = ddx===1?1 : ddx===-1?3 : ddy===1?2 : 0;
+      placeDir=d;
+      const prev=buildingAt(lastPaint.tx,lastPaint.ty);
+      if(prev&&prev.type==='belt') prev.dir=d; // flow the corner
+      placeBuilding('transport-belt',tx,ty,d);
+      lastPaint={tx,ty}; refreshHotbar(); refreshResStrip(); return;
+    }
+  }
+  placeBuilding(tool,tx,ty,placeDir);
+  lastPaint={tx,ty}; refreshHotbar(); refreshResStrip();
+}
+function tryDelete(tx,ty){
+  if(!inWorld(tx,ty)) return;
+  if(grid[ty][tx]){ removeBuilding(tx,ty); refreshHotbar(); refreshResStrip();
+    if(selected && selected.x===tx && selected.y===ty) closeDetail(); }
+}
+
+// keyboard
+window.addEventListener('keydown',e=>{
+  if(e.target && (e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA')) return;
+  if(e.repeat){ keys[e.key.toLowerCase()]=true; return; }
+  keys[e.key.toLowerCase()]=true;
+  const k=e.key.toLowerCase();
+  if(k==='r'){ placeDir=(placeDir+1)%4; if(selected&&selected.type&&['inserter'].includes(selected.type)){} updateReadout(); }
+  else if(k==='q'||k==='escape'){ setTool('select'); closeAllPanels(); }
+  else if(k==='x'){ setTool('delete'); }
+  else if(k==='e'){ toggleInv(); }
+  else if(k==='h'){ toggleHelp(); }
+  else if(k===' '){ togglePause(); e.preventDefault(); }
+  else if(k>='1'&&k<='9'){ const i=+k-1; const items=hotbarItems(); if(items[i]) setTool(items[i]); }
+});
+window.addEventListener('keyup',e=>{ keys[e.key.toLowerCase()]=false; });
+
+function handlePan(rdt){
+  const sp=460*rdt/cam.zoom;
+  if(keys['w']||keys['arrowup'])   cam.y-=sp;
+  if(keys['s']||keys['arrowdown']) cam.y+=sp;
+  if(keys['a']||keys['arrowleft']) cam.x-=sp;
+  if(keys['d']||keys['arrowright'])cam.x+=sp;
+  cam.x=Math.max(0,Math.min(WORLD_W*TILE,cam.x));
+  cam.y=Math.max(0,Math.min(WORLD_H*TILE,cam.y));
+}
+
+// ----------------------------- Rendering -----------------------------
+function render(time){
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle='#070a0e'; ctx.fillRect(0,0,W,H);
+
+  const z=cam.zoom, ts=TILE*z;
+  const originX=W/2-cam.x*z, originY=H/2-cam.y*z;
+  const x0=Math.max(0,Math.floor((cam.x-W/2/z)/TILE));
+  const y0=Math.max(0,Math.floor((cam.y-H/2/z)/TILE));
+  const x1=Math.min(WORLD_W-1,Math.ceil((cam.x+W/2/z)/TILE));
+  const y1=Math.min(WORLD_H-1,Math.ceil((cam.y+H/2/z)/TILE));
+
+  // ground layer from the pre-rendered canvas
+  if(groundCanvas){
+    const k=GP/TILE, s2d=z/k;
+    let sx=(cam.x-(W/2)/z)*k, sy=(cam.y-(H/2)/z)*k;
+    let sw=(W/z)*k, sh=(H/z)*k, dxp=0, dyp=0;
+    if(sx<0){ dxp=-sx*s2d; sw+=sx; sx=0; }
+    if(sy<0){ dyp=-sy*s2d; sh+=sy; sy=0; }
+    const GWp=WORLD_W*GP, GHp=WORLD_H*GP;
+    if(sx+sw>GWp) sw=GWp-sx;
+    if(sy+sh>GHp) sh=GHp-sy;
+    if(sw>0&&sh>0) ctx.drawImage(groundCanvas, sx,sy,sw,sh, dxp,dyp, sw*s2d, sh*s2d);
+  }
+
+  // per-tile overlays: ore nuggets + water shimmer (skipped when zoomed far out —
+  // the baked ground layer already carries patch color at that scale)
+  if(ts>=9) for(let y=y0;y<=y1;y++) for(let x=x0;x<=x1;x++){
+    const t=terrain[y][x];
+    const px=originX+x*ts, py=originY+y*ts;
+    if(t.water){
+      const ph=Math.sin(time*1.4 + x*0.8 + y*1.3);
+      ctx.globalAlpha=0.05+0.05*ph;
+      ctx.fillStyle='#7fb7e8';
+      ctx.fillRect(px+ts*0.1, py+ts*(0.25+0.4*h2u(x,y,3)), ts*0.8, ts*0.07);
+      ctx.globalAlpha=1;
+    } else if(t.ore){
+      const it=ITEMS[t.ore];
+      const frac=Math.min(1,t.amount/1400);
+      if(frac>0){
+        ctx.globalAlpha=0.10+0.30*frac;
+        ctx.fillStyle=it.c; ctx.fillRect(px,py,ts,ts);
+        ctx.globalAlpha=1;
+      }
+      // chunky nuggets, deterministic per tile
+      const n=3+Math.floor(h2u(x,y,worldSeed^99)*3);
+      for(let i=0;i<n;i++){
+        const r1=h2u(x*3+i,y*5+i,worldSeed^41), r2=h2u(x*7+i,y*11+i,worldSeed^43);
+        const nx=px+(0.10+r1*0.62)*ts, ny=py+(0.10+r2*0.62)*ts;
+        const s=ts*(0.10+((r1+r2)%0.1));
+        if(frac<=0){ // depleted patch: faint outlines only
+          ctx.globalAlpha=0.15; ctx.strokeStyle=it.c; ctx.lineWidth=1;
+          ctx.strokeRect(nx,ny,s,s*0.8); ctx.globalAlpha=1;
+        } else {
+          ctx.fillStyle=shade(it.c,-55); ctx.fillRect(nx,ny+s*0.2,s,s*0.75);
+          ctx.fillStyle=it.dark? '#3f4650':it.c; ctx.fillRect(nx,ny,s,s*0.7);
+          ctx.fillStyle='rgba(255,255,255,.22)'; ctx.fillRect(nx,ny,s*0.45,s*0.22);
+        }
+      }
+    }
+  }
+  // faint grid
+  if(z>0.75){
+    ctx.strokeStyle='rgba(88,110,96,.13)'; ctx.lineWidth=1;
+    ctx.beginPath();
+    for(let x=x0;x<=x1+1;x++){ const px=originX+x*ts; ctx.moveTo(px,originY+y0*ts); ctx.lineTo(px,originY+(y1+1)*ts); }
+    for(let y=y0;y<=y1+1;y++){ const py=originY+y*ts; ctx.moveTo(originX+x0*ts,py); ctx.lineTo(originX+(x1+1)*ts,py); }
+    ctx.stroke();
+  }
+
+  // buildings
+  for(let y=y0;y<=y1;y++) for(let x=x0;x<=x1;x++){
+    const b=grid[y][x]; if(!b) continue;
+    drawBuilding(b, originX+x*ts, originY+y*ts, ts, time);
+  }
+  // belt items drawn on top so they sit above tracks
+  for(const b of belts){
+    if(b.x<x0-1||b.x>x1+1||b.y<y0-1||b.y>y1+1) continue;
+    drawBeltItems(b, originX+b.x*ts, originY+b.y*ts, ts);
+  }
+  // inserter arms on top
+  for(const ins of inserters){
+    if(ins.x<x0-1||ins.x>x1+1||ins.y<y0-1||ins.y>y1+1) continue;
+    drawInserterArm(ins, originX+ins.x*ts, originY+ins.y*ts, ts);
+  }
+
+  // particles (smoke from furnaces, dust from drills)
+  updateParticles(time,originX,originY,z,x0,y0,x1,y1);
+
+  // ghost preview
+  drawGhost(originX,originY,ts);
+
+  // selection ring
+  if(selected){
+    const px=originX+selected.x*ts, py=originY+selected.y*ts;
+    ctx.strokeStyle='#43cdd6'; ctx.lineWidth=2;
+    ctx.strokeRect(px+1,py+1,ts-2,ts-2);
+  }
+
+  // panels that mirror live data
+  if(detailOpen) refreshDetail();
+  refreshResStrip();
+  refreshResearchUI();
+  refreshObjectiveUI();
+  if(++miniFrame>=30){ miniFrame=0; rebuildMiniBase(); }
+  drawMini();
+}
+
+// ----------------------------- Particles -----------------------------
+let parts=[], lastPT=0;
+function hexRGB(h){ const n=parseInt(h.slice(1),16);
+  return ((n>>16)&255)+','+((n>>8)&255)+','+(n&255); }
+function updateParticles(time,ox,oy,z,x0,y0,x1,y1){
+  const pdt=Math.min(0.05, lastPT? time-lastPT:0.016); lastPT=time;
+  const inView=(b)=> b.x>=x0-1&&b.x<=x1+1&&b.y>=y0-1&&b.y<=y1+1;
+  if(!paused && parts.length<240){
+    for(const f of furnaces){
+      if(f.working && inView(f) && Math.random()<0.10)
+        parts.push({x:(f.x+0.35+Math.random()*0.3)*TILE, y:(f.y+0.12)*TILE,
+          vx:(Math.random()-0.5)*5, vy:-16-Math.random()*10,
+          life:1.6+Math.random()*0.8, max:2.4, size:2.4+Math.random()*2.4,
+          col:'150,160,172', smoke:true});
+    }
+    for(const g of generators){
+      if(g.on && inView(g) && Math.random()<0.14)
+        parts.push({x:(g.x+0.66+Math.random()*0.16)*TILE, y:(g.y+0.05)*TILE,
+          vx:(Math.random()-0.5)*4, vy:-18-Math.random()*10,
+          life:1.4+Math.random()*0.8, max:2.2, size:2.2+Math.random()*2,
+          col:'128,134,144', smoke:true});
+    }
+    for(const m of miners){
+      if(m.active && m.oreItem && inView(m) && Math.random()<0.14)
+        parts.push({x:(m.x+0.3+Math.random()*0.4)*TILE, y:(m.y+0.45+Math.random()*0.2)*TILE,
+          vx:(Math.random()-0.5)*22, vy:-8-Math.random()*14,
+          life:0.5+Math.random()*0.3, max:0.8, size:1.4+Math.random()*1.4,
+          col:hexRGB(ITEMS[m.oreItem].c), smoke:false});
+    }
+  }
+  for(let i=parts.length-1;i>=0;i--){
+    const p=parts[i];
+    p.life-=pdt;
+    if(p.life<=0){ parts.splice(i,1); continue; }
+    p.x+=p.vx*pdt; p.y+=p.vy*pdt;
+    if(p.smoke){ p.vy-=6*pdt; p.vx+=Math.sin(time*3+i)*4*pdt; }
+    else p.vy+=70*pdt; // dust falls back
+    const sx=ox+p.x*z, sy=oy+p.y*z;
+    if(sx<-20||sx>W+20||sy<-20||sy>H+20) continue;
+    const grow=p.smoke? 1+(1-p.life/p.max)*1.8 : 1;
+    ctx.fillStyle=`rgba(${p.col},${(p.life/p.max)*(p.smoke?0.28:0.55)})`;
+    ctx.beginPath(); ctx.arc(sx,sy,p.size*z*grow,0,7); ctx.fill();
+  }
+}
+
+function shade(hex,amt){
+  const n=parseInt(hex.slice(1),16);
+  let r=(n>>16)+amt, g=((n>>8)&255)+amt, b=(n&255)+amt;
+  r=Math.max(0,Math.min(255,r)); g=Math.max(0,Math.min(255,g)); b=Math.max(0,Math.min(255,b));
+  return '#'+((1<<24)+(r<<16)+(g<<8)+b).toString(16).slice(1);
+}
+
+function drawArrow(cx,cy,dir,size,color){
+  const [dx,dy]=DIRV[dir];
+  ctx.save(); ctx.translate(cx,cy); ctx.rotate(Math.atan2(dy,dx));
+  ctx.fillStyle=color; ctx.beginPath();
+  ctx.moveTo(size,0); ctx.lineTo(-size*0.6,size*0.7); ctx.lineTo(-size*0.6,-size*0.7);
+  ctx.closePath(); ctx.fill(); ctx.restore();
+}
+
+function drawBuilding(b,px,py,ts,time){
+  const cx=px+ts/2, cy=py+ts/2, r=ts*0.5;
+  if(b.type!=='belt'){
+    ctx.fillStyle='rgba(0,0,0,.32)';
+    roundRect(px+ts*0.1,py+ts*0.16,ts*0.85,ts*0.84,ts*0.12); ctx.fill();
+  }
+  switch(b.type){
+    case 'belt':{
+      const fast=b.speed>1;
+      ctx.fillStyle=fast?'#3a2e33':'#2b333f';
+      roundRect(px+ts*0.06,py+ts*0.06,ts*0.88,ts*0.88,ts*0.14); ctx.fill();
+      ctx.strokeStyle=fast?'#5a3038':'#1a2028'; ctx.lineWidth=1; ctx.stroke();
+      if(ts<8) break; // far zoom: plain track only
+      // moving chevrons pointing along the belt direction
+      const [dx,dy]=DIRV[b.dir];
+      ctx.save(); ctx.translate(cx,cy); ctx.rotate(Math.atan2(dy,dx));
+      // side rails
+      ctx.strokeStyle='#3d4a5a'; ctx.lineWidth=Math.max(1,ts*0.045);
+      ctx.beginPath();
+      ctx.moveTo(-ts*0.46,-ts*0.32); ctx.lineTo(ts*0.46,-ts*0.32);
+      ctx.moveTo(-ts*0.46, ts*0.32); ctx.lineTo(ts*0.46, ts*0.32);
+      ctx.stroke();
+      // marching chevrons, evenly spaced, scrolling in +x (belt direction)
+      ctx.strokeStyle=fast?'#e07070':'#5c6d80'; ctx.lineWidth=Math.max(1.4,ts*0.06);
+      ctx.lineCap='round'; ctx.lineJoin='round';
+      const spacing=ts*0.34;
+      const phase=((b.anim||0)%1)*spacing;
+      for(let k=-2;k<=2;k++){
+        const ox=k*spacing+phase;
+        if(ox<-ts*0.44 || ox>ts*0.42) continue;
+        ctx.beginPath();
+        ctx.moveTo(ox-ts*0.09,-ts*0.15);
+        ctx.lineTo(ox+ts*0.05,0);
+        ctx.lineTo(ox-ts*0.09, ts*0.15);
+        ctx.stroke();
+      }
+      ctx.lineCap='butt'; ctx.lineJoin='miter';
+      ctx.restore();
+      break;
+    }
+    case 'splitter':{
+      ctx.fillStyle='#2e2f26'; roundRect(px+ts*0.05,py+ts*0.05,ts*0.9,ts*0.9,ts*0.12); ctx.fill();
+      ctx.strokeStyle='#c9a23a'; ctx.lineWidth=1.5; ctx.stroke();
+      if(ts>=8){
+        // fork: input from behind → straight + right outputs
+        ctx.save(); ctx.translate(cx,cy); ctx.rotate(Math.atan2(DIRV[b.dir][1],DIRV[b.dir][0]));
+        ctx.strokeStyle='#e0b84a'; ctx.lineWidth=Math.max(1.6,ts*0.06);
+        ctx.lineCap='round'; ctx.lineJoin='round';
+        ctx.beginPath();
+        ctx.moveTo(-ts*0.32,0); ctx.lineTo(ts*0.08,0);          // stem
+        ctx.lineTo(ts*0.3,0);                                   // straight out
+        ctx.moveTo(ts*0.08,0); ctx.lineTo(ts*0.08,ts*0.3);      // branch to the right
+        ctx.stroke();
+        // arrow heads
+        ctx.beginPath();
+        ctx.moveTo(ts*0.22,-ts*0.08); ctx.lineTo(ts*0.32,0); ctx.lineTo(ts*0.22,ts*0.08);
+        ctx.moveTo(ts*0.0,ts*0.22); ctx.lineTo(ts*0.08,ts*0.32); ctx.lineTo(ts*0.16,ts*0.22);
+        ctx.stroke();
+        ctx.lineCap='butt'; ctx.lineJoin='miter';
+        ctx.restore();
+      }
+      if(b.buffer) drawItemDot(cx,cy,ts*0.14,b.buffer);
+      break;
+    }
+    case 'miner':{
+      const coreCol=b.electric? '#43cdd6':'#ffb02e';
+      ctx.fillStyle=b.active? (b.electric?'#1c3038':'#3a2f1c') :'#2c2f36';
+      roundRect(px+ts*0.05,py+ts*0.05,ts*0.9,ts*0.9,ts*0.12); ctx.fill();
+      ctx.strokeStyle=b.active? (b.electric?'#43a8cf':'#c98a3a') :'#3a4450'; ctx.lineWidth=1.5; ctx.stroke();
+      // drill core
+      ctx.fillStyle=b.active? coreCol:'#5a6472';
+      ctx.beginPath(); ctx.arc(cx,cy,ts*0.16,0,7); ctx.fill();
+      if(b.active){ ctx.globalAlpha=0.35; ctx.fillStyle=coreCol;
+        ctx.beginPath(); ctx.arc(cx,cy,ts*0.16+ (Math.sin(time*8)+1)*ts*0.05,0,7); ctx.fill(); ctx.globalAlpha=1; }
+      drawArrow(px+ts*0.5+DIRV[b.dir][0]*ts*0.34, py+ts*0.5+DIRV[b.dir][1]*ts*0.34, b.dir, ts*0.1, b.electric?'#43a8cf':'#cf8b3a');
+      break;
+    }
+    case 'furnace':{
+      const hot=b.working, steel=b.speed>1, elec=b.electric;
+      const bord = hot? (elec?'#5ec2b0':steel?'#c8d2e0':'#cf8b5a') : (elec?'#3a6a62':steel?'#6a7484':'#3a4450');
+      ctx.fillStyle=hot? (elec?'#1e302c':steel?'#33302a':'#3a2a1e') : (elec?'#252f2c':steel?'#31363f':'#2a2f37');
+      roundRect(px+ts*0.06,py+ts*0.08,ts*0.88,ts*0.84,ts*0.1); ctx.fill();
+      ctx.strokeStyle=bord; ctx.lineWidth=1.5; ctx.stroke();
+      if(elec){
+        // glowing induction coil instead of an ember window
+        ctx.strokeStyle=hot? (Math.sin(time*8)>0?'#7fe0cf':'#5ec2b0') : '#2c4a44';
+        ctx.lineWidth=Math.max(1.6,ts*0.06);
+        ctx.beginPath(); ctx.arc(cx,cy+ts*0.04,ts*0.2,0,7); ctx.stroke();
+        if(hot){ ctx.globalAlpha=.4; ctx.beginPath(); ctx.arc(cx,cy+ts*0.04,ts*0.2+(Math.sin(time*7)+1)*ts*0.04,0,7); ctx.stroke(); ctx.globalAlpha=1; }
+      } else {
+        ctx.fillStyle=hot? (Math.sin(time*10)>0? (steel?'#ffd070':'#ff7a2e') : '#ffb02e') : '#151b22';
+        roundRect(px+ts*0.28,py+ts*0.4,ts*0.44,ts*0.34,ts*0.05); ctx.fill();
+        if(hot){ ctx.globalAlpha=.5; ctx.fillStyle=steel?'#ffd070':'#ff7a2e';
+          roundRect(px+ts*0.24,py+ts*0.36,ts*0.52,ts*0.42,ts*0.06); ctx.fill(); ctx.globalAlpha=1; }
+      }
+      progressPip(px,py,ts,b.prog, elec?'#5ec2b0':'#ffb02e');
+      break;
+    }
+    case 'assembler':{
+      ctx.fillStyle='#1f2a38'; roundRect(px+ts*0.05,py+ts*0.05,ts*0.9,ts*0.9,ts*0.1); ctx.fill();
+      ctx.strokeStyle=b.working?'#4a90cf':'#33475e'; ctx.lineWidth=1.5; ctx.stroke();
+      // rotating gear
+      ctx.save(); ctx.translate(cx,cy); ctx.rotate((b.working? time*2:0)+(b.prog||0)*6.28);
+      ctx.strokeStyle=b.recipe? '#4fb0e6':'#40556c'; ctx.lineWidth=Math.max(1.5,ts*0.05);
+      const rr=ts*0.22;
+      ctx.beginPath(); ctx.arc(0,0,rr,0,7); ctx.stroke();
+      for(let i=0;i<6;i++){ const a=i/6*6.28; ctx.beginPath();
+        ctx.moveTo(Math.cos(a)*rr,Math.sin(a)*rr); ctx.lineTo(Math.cos(a)*rr*1.4,Math.sin(a)*rr*1.4); ctx.stroke(); }
+      ctx.restore();
+      progressPip(px,py,ts,b.prog,'#4a90cf');
+      break;
+    }
+    case 'inserter':{
+      const col=b.reach>1? '#c98adf' : b.fast?'#4aa8e0':'#cf5050';
+      ctx.fillStyle='#241b1b'; ctx.beginPath(); ctx.arc(cx,cy,ts*0.2,0,7); ctx.fill();
+      ctx.strokeStyle=col; ctx.lineWidth=1.5; ctx.stroke();
+      // base direction dot
+      drawArrow(px+ts*0.5+DIRV[b.dir][0]*ts*0.3, py+ts*0.5+DIRV[b.dir][1]*ts*0.3, b.dir, ts*0.08,col);
+      break; // arm drawn later
+    }
+    case 'generator':{
+      if(b.solar){
+        // solar panel: blue photovoltaic grid, always "on"
+        ctx.fillStyle='#1b2740'; roundRect(px+ts*0.06,py+ts*0.06,ts*0.88,ts*0.88,ts*0.1); ctx.fill();
+        ctx.strokeStyle='#4a7ad0'; ctx.lineWidth=1.5; ctx.stroke();
+        ctx.strokeStyle='#2f4e86'; ctx.lineWidth=1;
+        for(let i=1;i<3;i++){ const gx=px+ts*0.06+i*ts*0.293;
+          ctx.beginPath(); ctx.moveTo(gx,py+ts*0.06); ctx.lineTo(gx,py+ts*0.94); ctx.stroke();
+          const gy=py+ts*0.06+i*ts*0.293;
+          ctx.beginPath(); ctx.moveTo(px+ts*0.06,gy); ctx.lineTo(px+ts*0.94,gy); ctx.stroke(); }
+        // sun glint sweeping across
+        ctx.globalAlpha=0.25+0.15*Math.sin(time*1.5);
+        ctx.fillStyle='#bcd4ff';
+        const gxp=px+ts*0.1+((time*0.15)%1)*ts*0.7;
+        ctx.beginPath(); ctx.moveTo(gxp,py+ts*0.1); ctx.lineTo(gxp+ts*0.12,py+ts*0.1);
+        ctx.lineTo(gxp-ts*0.06,py+ts*0.9); ctx.lineTo(gxp-ts*0.18,py+ts*0.9); ctx.closePath(); ctx.fill();
+        ctx.globalAlpha=1;
+        break;
+      }
+      ctx.fillStyle=b.on?'#2f2c1e':'#2a2c26';
+      roundRect(px+ts*0.06,py+ts*0.14,ts*0.88,ts*0.74,ts*0.1); ctx.fill();
+      ctx.strokeStyle=b.on?'#c9a23a':'#4a4c3e'; ctx.lineWidth=1.5; ctx.stroke();
+      // chimney
+      ctx.fillStyle='#3a3d34'; ctx.fillRect(px+ts*0.66,py+ts*0.02,ts*0.16,ts*0.18);
+      // flywheel
+      ctx.save(); ctx.translate(px+ts*0.38,py+ts*0.52);
+      if(b.on) ctx.rotate(time*4);
+      ctx.strokeStyle=b.on?'#ffb02e':'#5a5c4e'; ctx.lineWidth=Math.max(1.4,ts*0.05);
+      ctx.beginPath(); ctx.arc(0,0,ts*0.17,0,7); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(-ts*0.17,0); ctx.lineTo(ts*0.17,0);
+      ctx.moveTo(0,-ts*0.17); ctx.lineTo(0,ts*0.17); ctx.stroke();
+      ctx.restore();
+      // piston rod
+      ctx.strokeStyle=b.on?'#c9a23a':'#5a5c4e'; ctx.lineWidth=Math.max(1.4,ts*0.05);
+      const pp=b.on? Math.sin(time*8)*ts*0.07 : 0;
+      ctx.beginPath(); ctx.moveTo(px+ts*0.55,py+ts*0.52); ctx.lineTo(px+ts*0.78+pp,py+ts*0.52); ctx.stroke();
+      break;
+    }
+    case 'silo':{
+      // pad
+      ctx.fillStyle='#20262f'; ctx.beginPath(); ctx.arc(cx,cy,ts*0.42,0,7); ctx.fill();
+      ctx.strokeStyle='#4a5668'; ctx.lineWidth=1.5; ctx.stroke();
+      ctx.strokeStyle='#333f50'; ctx.beginPath(); ctx.arc(cx,cy,ts*0.3,0,7); ctx.stroke();
+      if(b.launched){
+        ctx.fillStyle='rgba(20,16,12,.8)'; ctx.beginPath(); ctx.arc(cx,cy,ts*0.22,0,7); ctx.fill();
+        ctx.fillStyle='#5ed07f'; ctx.font=`${ts*0.18}px monospace`; ctx.textAlign='center'; ctx.textBaseline='middle';
+        ctx.fillText('✓',cx,cy);
+      } else {
+        // rocket grows with parts loaded
+        const f=Math.min(1,b.parts/ROCKET_REQ);
+        const h=ts*(0.18+0.42*f), w=ts*0.16;
+        ctx.fillStyle='#d0d8e4';
+        roundRect(cx-w/2, cy+ts*0.24-h, w, h, w*0.4); ctx.fill();
+        ctx.fillStyle='#e05656';
+        ctx.beginPath(); ctx.moveTo(cx-w/2,cy+ts*0.24-h); ctx.lineTo(cx,cy+ts*0.24-h-ts*0.1);
+        ctx.lineTo(cx+w/2,cy+ts*0.24-h); ctx.closePath(); ctx.fill();
+        if(f>=1){ ctx.globalAlpha=0.4+0.3*Math.sin(time*6); ctx.strokeStyle='#5ed07f';
+          ctx.lineWidth=2; ctx.beginPath(); ctx.arc(cx,cy,ts*0.46,0,7); ctx.stroke(); ctx.globalAlpha=1; }
+      }
+      progressPip(px,py,ts,b.launched?0:b.parts/ROCKET_REQ,'#e0b040');
+      break;
+    }
+    case 'chest':{
+      ctx.fillStyle='#2c2418'; roundRect(px+ts*0.14,py+ts*0.16,ts*0.72,ts*0.68,ts*0.08); ctx.fill();
+      ctx.strokeStyle='#b98a4a'; ctx.lineWidth=1.5; ctx.stroke();
+      ctx.strokeStyle='#7a5e30'; ctx.beginPath();
+      ctx.moveTo(px+ts*0.14,py+ts*0.34); ctx.lineTo(px+ts*0.86,py+ts*0.34); ctx.stroke();
+      // fill indicator
+      let n=0; for(const k in b.store) n+=b.store[k];
+      if(n>0){ ctx.fillStyle='#e0c070'; ctx.font=`${ts*0.24}px var(--mono)`; ctx.textAlign='center'; ctx.textBaseline='middle';
+        ctx.fillText(n>99?'99+':n, cx, cy+ts*0.06); }
+      break;
+    }
+    case 'lab':{
+      ctx.fillStyle='#241a33'; roundRect(px+ts*0.08,py+ts*0.28,ts*0.84,ts*0.62,ts*0.08); ctx.fill();
+      ctx.beginPath(); ctx.arc(cx,py+ts*0.34,ts*0.34,Math.PI,0); ctx.fill();
+      ctx.strokeStyle=b.working?'#a476e0':'#4a3a63'; ctx.lineWidth=1.5;
+      roundRect(px+ts*0.08,py+ts*0.28,ts*0.84,ts*0.62,ts*0.08); ctx.stroke();
+      if(b.working){ ctx.globalAlpha=0.4+0.3*Math.sin(time*6); ctx.fillStyle='#a476e0';
+        ctx.beginPath(); ctx.arc(cx,py+ts*0.4,ts*0.14,0,7); ctx.fill(); ctx.globalAlpha=1; }
+      break;
+    }
+  }
+  // critical-stall warning badge (no power / out of fuel) — only when zoomed in enough
+  if(ts>=11 && ['assembler','furnace','lab','miner','generator'].includes(b.type)){
+    const st=machineStatus(b);
+    if(st.w>=2){
+      const bx=px+ts*0.78, by=py+ts*0.2, pulse=0.55+0.45*Math.sin(time*6);
+      ctx.globalAlpha=pulse;
+      ctx.fillStyle='#e05656'; ctx.beginPath(); ctx.arc(bx,by,ts*0.16,0,7); ctx.fill();
+      ctx.globalAlpha=1;
+      ctx.fillStyle='#fff'; ctx.font=`bold ${ts*0.22}px sans-serif`;
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText('!',bx,by+ts*0.01);
+    }
+  }
+}
+function progressPip(px,py,ts,prog,col){
+  if(!prog) return;
+  ctx.fillStyle='#0b0f14'; ctx.fillRect(px+ts*0.12,py+ts*0.86,ts*0.76,ts*0.06);
+  ctx.fillStyle=col; ctx.fillRect(px+ts*0.12,py+ts*0.86,ts*0.76*Math.min(1,prog),ts*0.06);
+}
+function roundRect(x,y,w,h,r){ ctx.beginPath();
+  ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+
+function drawBeltItems(b,px,py,ts){
+  if(!b.items.length) return;
+  const [dx,dy]=DIRV[b.dir];
+  for(const it of b.items){
+    // pos 0..1 travels from entrance (opposite dir) to exit (dir)
+    const t=it.pos;
+    const cx=px+ts*0.5 + dx*(t-0.5)*ts;
+    const cy=py+ts*0.5 + dy*(t-0.5)*ts;
+    drawItemDot(cx,cy,ts*0.16,it.item);
+  }
+}
+function drawItemDot(cx,cy,r,item){
+  const it=ITEMS[item];
+  ctx.fillStyle=it.c; ctx.beginPath(); ctx.arc(cx,cy,r,0,7); ctx.fill();
+  if(r>2){
+    ctx.strokeStyle='rgba(0,0,0,.55)'; ctx.lineWidth=1; ctx.stroke();
+    ctx.fillStyle='rgba(255,255,255,.28)'; ctx.beginPath(); ctx.arc(cx-r*0.3,cy-r*0.3,r*0.35,0,7); ctx.fill();
+  }
+}
+function drawInserterArm(ins,px,py,ts){
+  const cx=px+ts/2, cy=py+ts/2;
+  const [dx,dy]=DIRV[ins.dir];
+  const col=ins.reach>1? '#c98adf' : ins.fast?'#4aa8e0':'#cf5050';
+  const back=Math.atan2(-dy,-dx), fwd=Math.atan2(dy,dx);
+  let d=fwd-back;
+  while(d>Math.PI)d-=6.283; while(d<-Math.PI)d+=6.283;
+  const ang = ins.holding===null? back : back + d*Math.max(0,Math.min(1,ins.t));
+  const len=ts*(ins.reach>1? 0.82 : 0.42);
+  const hx=cx+Math.cos(ang)*len, hy=cy+Math.sin(ang)*len;
+  ctx.strokeStyle=col; ctx.lineWidth=Math.max(1.6,ts*0.055);
+  ctx.beginPath(); ctx.moveTo(cx,cy); ctx.lineTo(hx,hy); ctx.stroke();
+  if(ins.holding) drawItemDot(hx,hy,ts*0.13,ins.holding);
+}
+
+let ghostCanvases={};
+function drawGhost(originX,originY,ts){
+  if(tool==='select') return;
+  const {tx,ty}=mouse; if(!inWorld(tx,ty)) return;
+  const px=originX+tx*ts, py=originY+ty*ts;
+  if(tool==='delete'){
+    ctx.fillStyle='rgba(226,89,79,.18)'; ctx.fillRect(px,py,ts,ts);
+    ctx.strokeStyle='#e2594f'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(px+ts*0.3,py+ts*0.3); ctx.lineTo(px+ts*0.7,py+ts*0.7);
+    ctx.moveTo(px+ts*0.7,py+ts*0.3); ctx.lineTo(px+ts*0.3,py+ts*0.7); ctx.stroke();
+    return;
+  }
+  const type=ITEMS[tool].b;
+  let valid = !grid[ty][tx] && invCount(tool)>0 && !terrain[ty][tx].water;
+  if(type==='miner') valid = valid && !!terrain[ty][tx].ore;
+  if(grid[ty][tx] && grid[ty][tx].type==='belt' && type==='belt') valid=true;
+  ctx.globalAlpha=0.55;
+  const tmp=makeBuilding(type,tx,ty,placeDir,tool);
+  if(type==='belt') tmp.anim=(performance.now()/700)%1;
+  drawBuilding(tmp,px,py,ts,performance.now()/1000);
+  ctx.globalAlpha=1;
+  ctx.strokeStyle=valid?'#5ed07f':'#e2594f'; ctx.lineWidth=2;
+  ctx.strokeRect(px+1,py+1,ts-2,ts-2);
+  // facing arrow for orientable
+  if(['belt','inserter','miner'].includes(type)){
+    drawArrow(px+ts*0.5+DIRV[placeDir][0]*ts*0.4, py+ts*0.5+DIRV[placeDir][1]*ts*0.4, placeDir, ts*0.1,'#5ed07f');
+  }
+}
+
+// ----------------------------- UI: hotbar -----------------------------
+const HOTBAR_ORDER=['transport-belt','fast-transport-belt','splitter','burner-mining-drill',
+  'electric-mining-drill','stone-furnace','steel-furnace','electric-furnace',
+  'inserter','fast-inserter','long-handed-inserter',
+  'assembling-machine','wooden-chest','steam-engine','solar-panel','lab','rocket-silo'];
+function hotbarItems(){ return HOTBAR_ORDER.filter(i=>unlocked.has(i) || (inventory[i]||0)>0); }
+let hotbarSig='';
+function buildHotbar(){
+  hotbarSig=hotbarItems().join(',');
+  const el=document.getElementById('hotbar'); el.innerHTML='';
+  hotbarItems().forEach((item,i)=>{
+    const s=document.createElement('div'); s.className='slot'; s.dataset.item=item;
+    s.innerHTML=`<span class="key">${i<9?i+1:''}</span>
+      <canvas width="34" height="34"></canvas>
+      <span class="lbl">${ITEMS[item].name}</span>
+      <span class="ct"></span>`;
+    s.onclick=()=>setTool(item===tool?'select':item);
+    el.appendChild(s);
+    drawSlotIcon(s.querySelector('canvas'),item);
+  });
+  const del=document.createElement('div'); del.className='slot del'; del.dataset.item='delete';
+  del.innerHTML=`<span class="key">X</span>
+    <canvas width="34" height="34"></canvas>
+    <span class="lbl" style="color:#e2594f">Bulldoze</span>`;
+  del.onclick=()=>setTool('delete');
+  el.appendChild(del);
+  const c=del.querySelector('canvas').getContext('2d');
+  c.strokeStyle='#e2594f'; c.lineWidth=3; c.beginPath();
+  c.moveTo(9,9); c.lineTo(25,25); c.moveTo(25,9); c.lineTo(9,25); c.stroke();
+  refreshHotbar();
+}
+function drawSlotIcon(cv,item){
+  const c=cv.getContext('2d'); c.clearRect(0,0,34,34);
+  const I=ITEMS[item];
+  const type=I.b;
+  if(type==='belt'){ c.fillStyle=I.tier===2?'#3a2e33':'#2b333f'; rr(c,4,4,26,26,5);
+    c.strokeStyle=I.tier===2?'#e07070':'#586472'; c.lineWidth=2;
+    c.beginPath(); c.moveTo(11,10);c.lineTo(18,17);c.lineTo(11,24); c.moveTo(18,10);c.lineTo(25,17);c.lineTo(18,24); c.stroke(); }
+  else if(type==='splitter'){ c.fillStyle='#2e2f26'; rr(c,4,4,26,26,4);
+    c.strokeStyle='#e0b84a'; c.lineWidth=2.4; c.lineCap='round'; c.lineJoin='round';
+    c.beginPath(); c.moveTo(8,17); c.lineTo(18,17); c.lineTo(26,17); c.moveTo(18,17); c.lineTo(18,26); c.stroke();
+    c.beginPath(); c.moveTo(22,13);c.lineTo(26,17);c.lineTo(22,21); c.moveTo(14,22);c.lineTo(18,26);c.lineTo(22,22); c.stroke();
+    c.lineCap='butt'; c.lineJoin='miter'; }
+  else if(type==='miner'){ c.fillStyle='#2c2f36'; rr(c,3,3,28,28,4);
+    c.fillStyle=I.electric?'#43cdd6':'#ffb02e'; c.beginPath(); c.arc(17,17,6,0,7); c.fill(); }
+  else if(type==='furnace'){ c.fillStyle=I.electric?'#1e302c':I.speed?'#31363f':'#2a2f37'; rr(c,4,4,26,26,3);
+    if(I.electric){ c.strokeStyle='#5ec2b0'; c.lineWidth=2.5; c.beginPath(); c.arc(17,17,7,0,7); c.stroke(); }
+    else { c.fillStyle=I.speed?'#ffd070':'#ff7a2e'; rr(c,11,15,12,10,2); } }
+  else if(type==='inserter'){ const col=I.reach>1?'#c98adf':I.fast?'#4aa8e0':'#cf5050';
+    c.fillStyle='#241b1b'; c.beginPath(); c.arc(17,20,6,0,7); c.fill();
+    c.strokeStyle=col; c.lineWidth=3; c.beginPath(); c.moveTo(17,20); c.lineTo(I.reach>1?26:24,I.reach>1?4:8); c.stroke(); }
+  else if(type==='assembler'){ c.fillStyle='#1f2a38'; rr(c,3,3,28,28,3); c.strokeStyle='#4fb0e6'; c.lineWidth=2.5; c.beginPath(); c.arc(17,17,7,0,7); c.stroke(); }
+  else if(type==='chest'){ c.fillStyle='#2c2418'; rr(c,7,8,20,18,2); c.strokeStyle='#b98a4a'; c.lineWidth=2; c.strokeRect(7,8,20,18); }
+  else if(type==='generator' && I.solar){ c.fillStyle='#1b2740'; rr(c,4,4,26,26,3);
+    c.strokeStyle='#4a7ad0'; c.lineWidth=1.6;
+    c.beginPath(); c.moveTo(13,4);c.lineTo(13,30); c.moveTo(21,4);c.lineTo(21,30);
+    c.moveTo(4,13);c.lineTo(30,13); c.moveTo(4,21);c.lineTo(30,21); c.stroke(); }
+  else if(type==='generator'){ c.fillStyle='#2a2c26'; rr(c,4,8,26,20,3);
+    c.strokeStyle='#c9a23a'; c.lineWidth=2.5; c.beginPath(); c.arc(13,18,5,0,7); c.stroke();
+    c.fillStyle='#3a3d34'; c.fillRect(22,3,6,7); }
+  else if(type==='lab'){ c.fillStyle='#241a33'; rr(c,5,14,24,16,3); c.fillStyle='#241a33'; c.beginPath(); c.arc(17,15,10,Math.PI,0); c.fill(); c.strokeStyle='#a476e0'; c.lineWidth=2; c.beginPath(); c.arc(17,15,10,Math.PI,0); c.stroke(); }
+  else if(type==='silo'){ c.strokeStyle='#4a5668'; c.lineWidth=2;
+    c.beginPath(); c.arc(17,19,11,0,7); c.stroke();
+    c.fillStyle='#d0d8e4'; rr(c,14,10,6,14,3);
+    c.fillStyle='#e05656'; c.beginPath(); c.moveTo(14,10); c.lineTo(17,4); c.lineTo(20,10); c.closePath(); c.fill(); }
+}
+function rr(c,x,y,w,h,r){ c.beginPath(); c.moveTo(x+r,y); c.arcTo(x+w,y,x+w,y+h,r); c.arcTo(x+w,y+h,x,y+h,r); c.arcTo(x,y+h,x,y,r); c.arcTo(x,y,x+w,y,r); c.closePath(); c.fill(); }
+function refreshHotbar(){
+  // if the set of shown items changed (new unlock or first-crafted item), rebuild once
+  if(hotbarItems().join(',')!==hotbarSig){ buildHotbar(); return; }
+  document.querySelectorAll('#hotbar .slot').forEach(s=>{
+    const item=s.dataset.item;
+    if(item==='delete'){ s.classList.toggle('sel',tool==='delete'); return; }
+    s.classList.toggle('sel',tool===item);
+    const ct=s.querySelector('.ct'); const n=invCount(item);
+    ct.textContent=n; ct.classList.toggle('zero',n===0);
+  });
+}
+function setTool(t){ tool=t; refreshHotbar(); updateReadout(); if(t!=='select')closeDetail(); }
+
+// ----------------------------- UI: resource strip -----------------------------
+const STRIP_ITEMS=['iron-plate','copper-plate','steel-plate','iron-gear-wheel',
+  'electronic-circuit','advanced-circuit','automation-science-pack','logistics-science-pack',
+  'production-science-pack','rocket-part','coal'];
+let lastStrip='';
+function refreshResStrip(){
+  const html=STRIP_ITEMS.map(it=>{
+    const I=ITEMS[it];
+    return `<div class="res"><span class="sw" style="background:${I.c}"></span>
+      <span class="n">${I.name}</span><span class="v">${invCount(it)}</span></div>`;
+  }).join('');
+  if(html!==lastStrip){ lastStrip=html; document.getElementById('resStrip').innerHTML=html; }
+}
+
+// ----------------------------- UI: research -----------------------------
+let lastResearch='';
+function refreshResearchUI(){
+  const done=research.index>=TECHS.length;
+  const tech=done? null : TECHS[research.index];
+  const anyLab=labs.some(l=>l.working);
+  let frac=1, totNeed=0, totHave=0;
+  if(!done){ for(const ty in tech.cost){ totNeed+=tech.cost[ty]; totHave+=Math.min(research.prog[ty],tech.cost[ty]); }
+    frac = totNeed? totHave/totNeed : 0; }
+  const bonus=[];
+  if(miningMult>1)bonus.push('⛏×'+miningMult.toFixed(2));
+  if(logisticsMult>1)bonus.push('▸×'+logisticsMult.toFixed(2));
+  if(craftingMult>1)bonus.push('⚙×'+craftingMult.toFixed(2));
+  if(smeltMult>1)bonus.push('🔥×'+smeltMult.toFixed(2));
+  if(genOutputMult>1)bonus.push('⚡×'+genOutputMult.toFixed(2));
+  const powShort=powerEff<0.999;
+  const sig=[research.index,research.prog.r,research.prog.g,research.prog.b,anyLab,bonus.join(''),powerSupply,powerDemand].join('|');
+  if(sig===lastResearch) return;
+  lastResearch=sig;
+  document.getElementById('rTech').textContent = done? 'All research complete' : tech.name;
+  document.getElementById('rDesc').textContent = done? 'Build a Rocket Silo and launch.' : tech.desc;
+  document.getElementById('rFill').style.width=(frac*100)+'%';
+  let cnt='—';
+  if(!done){ const parts=[];
+    if('r' in tech.cost) parts.push(`<span style="color:var(--red)">${Math.min(research.prog.r,tech.cost.r)}/${tech.cost.r}🔴</span>`);
+    if('g' in tech.cost) parts.push(`<span style="color:var(--green)">${Math.min(research.prog.g,tech.cost.g)}/${tech.cost.g}🟢</span>`);
+    if('b' in tech.cost) parts.push(`<span style="color:#4aa8e0">${Math.min(research.prog.b,tech.cost.b)}/${tech.cost.b}🔵</span>`);
+    cnt=parts.join(' · '); }
+  document.getElementById('rCount').innerHTML=cnt;
+  document.getElementById('rStatus').textContent = done? 'Done' : (anyLab?'Researching…':'Feed a Lab');
+  document.getElementById('rBonus').textContent=bonus.join('  ');
+  const pw=document.getElementById('pwr');
+  if(pw){ pw.textContent=`${powerSupply} / ${powerDemand} kW`;
+    pw.style.color = powerDemand===0? 'var(--faint)' : (powShort? 'var(--red)':'var(--green)'); }
+}
+
+let lastObjective='';
+function refreshObjectiveUI(){
+  const all=mIndex>=MILESTONES.length;
+  const m=all?null:MILESTONES[mIndex];
+  let have=0, need=1;
+  if(m&&m.prod){ need=m.prod[1]; have=Math.min(prodCount[m.prod[0]]||0, need); }
+  const sig=[mIndex, m?(m.prod?have:(milestoneDone(m)?1:0)):9].join('|');
+  if(sig===lastObjective) return;
+  lastObjective=sig;
+  const step=document.getElementById('obStep');
+  const name=document.getElementById('obName');
+  const desc=document.getElementById('obDesc');
+  const fill=document.getElementById('obFill');
+  if(all){ step.textContent='✓'; name.textContent='All objectives complete';
+    desc.textContent='You built a self-sustaining factory. Well done, engineer.';
+    fill.style.width='100%'; return; }
+  step.textContent=(mIndex+1)+' / '+MILESTONES.length;
+  name.textContent=m.name;
+  desc.textContent=m.desc;
+  fill.style.width=(m.prod? (have/need*100) : (milestoneDone(m)?100:6))+'%';
+}
+
+// ----------------------------- UI: readout -----------------------------
+function updateReadout(){
+  const {tx,ty}=mouse;
+  document.getElementById('roCoord').textContent = inWorld(tx,ty)? `${tx}, ${ty}`:'—';
+  const t=terrainAt(tx,ty);
+  document.getElementById('roGround').textContent =
+    (t&&t.water)? 'water' : (t&&t.ore)? `${ITEMS[t.ore].name} (${t.amount})`:'grass';
+  const b=buildingAt(tx,ty);
+  let objTxt='—';
+  if(b){ objTxt=({belt:'Belt',miner:'Drill',furnace:'Furnace',assembler:'Assembler',
+    inserter:'Inserter',chest:'Chest',lab:'Lab',generator:'Steam Generator',silo:'Rocket Silo'})[b.type];
+    if(b.item && ITEMS[b.item]) objTxt=ITEMS[b.item].name;
+    if(['belt','inserter','miner','splitter'].includes(b.type)) objTxt+=' ↦'+DIRNAME[b.dir]; }
+  document.getElementById('roObj').textContent=objTxt;
+  let hint='';
+  if(tool==='select') hint='Click a machine to inspect';
+  else if(tool==='delete') hint='Click to remove (refunds)';
+  else hint=`Placing ${ITEMS[tool].name} · facing ${DIRNAME[placeDir]} · [R] rotate`;
+  document.getElementById('roHint').textContent=hint;
+}
+
+// ----------------------------- UI: notifications -----------------------------
+function notify(msg,kind){
+  const box=document.getElementById('notes');
+  const n=document.createElement('div'); n.className='note '+(kind||''); n.textContent=msg;
+  box.appendChild(n);
+  setTimeout(()=>{ n.style.transition='opacity .4s'; n.style.opacity='0'; setTimeout(()=>n.remove(),400); }, 2200);
+  while(box.children.length>4) box.removeChild(box.firstChild);
+}
+
+// ----------------------------- UI: inventory / crafting -----------------------------
+let invOpen=false;
+function toggleInv(){ invOpen?closeInv():openInv(); }
+function openInv(){
+  closeDetail(); invOpen=true; invSig='';
+  let el=document.getElementById('inv');
+  if(!el){ el=document.createElement('div'); el.className='panel'; el.id='inv';
+    document.body.appendChild(el); }
+  renderInv(); el.style.display='block';
+  document.getElementById('btnInv').classList.add('on');
+}
+function closeInv(){ invOpen=false; const el=document.getElementById('inv'); if(el)el.style.display='none';
+  document.getElementById('btnInv').classList.remove('on'); }
+let invSig='';
+function renderInv(){
+  const el=document.getElementById('inv');
+  const owned=Object.keys(inventory).filter(k=>inventory[k]>0)
+    .sort((a,b)=>ITEMS[a].name.localeCompare(ITEMS[b].name));
+  // structure signature: which owned items exist + which recipes are craftable
+  const craftIds=Object.keys(RECIPES).filter(id=>RECIPES[id].cat==='craft');
+  const sig=owned.join(',')+'|'+craftIds.map(id=>Object.keys(RECIPES[id].in).every(k=>invCount(k)>=RECIPES[id].in[k])?1:0).join('');
+  if(sig===invSig && el.querySelector('.craftgrid')){
+    // structure unchanged — just refresh the numbers in place, keep scroll & buttons
+    owned.forEach(k=>{ const q=el.querySelector(`.icell[data-k="${k}"] .qt`); if(q)q.textContent=inventory[k]; });
+    return;
+  }
+  invSig=sig;
+  const savedScroll=el.scrollTop;
+  const invHtml=owned.map(k=>`<div class="icell" data-k="${k}"><span class="sw" style="background:${ITEMS[k].c}"></span>
+     <span class="nm">${ITEMS[k].name}</span><span class="qt">${inventory[k]}</span></div>`).join('')
+     || '<div class="nm" style="color:var(--faint)">Empty — mine and smelt to fill your stores.</div>';
+  const craftHtml=craftIds.map(id=>{
+    const rec=RECIPES[id]; const outName=Object.keys(rec.out)[0];
+    const can=Object.keys(rec.in).every(k=>invCount(k)>=rec.in[k]);
+    const ing=Object.keys(rec.in).map(k=>{
+      const have=invCount(k)>=rec.in[k];
+      return `<span class="${have?'ok':'bad'}">${rec.in[k]} ${ITEMS[k].name}</span>`;
+    }).join(', ');
+    return `<div class="craft ${can?'':'no'}" data-recipe="${id}">
+      <div class="top"><span class="sw" style="background:${ITEMS[outName].c}"></span>
+      <b>${ITEMS[outName]?ITEMS[outName].name:outName}</b>
+      <span class="out">+${rec.out[outName]}</span></div>
+      <div class="ing">${ing}</div></div>`;
+  }).join('');
+  el.innerHTML=`<div class="ph"><b>Inventory &amp; Hand-crafting</b><span class="x" id="invX">✕</span></div>
+    <div class="pb">
+      <div class="sect-title">Stores</div>
+      <div class="invgrid">${invHtml}</div>
+      <div class="sect-title">Hand-craft (instant, uses your stores)</div>
+      <div class="craftgrid">${craftHtml}</div>
+    </div>`;
+  el.querySelector('#invX').onclick=closeInv;
+  el.querySelectorAll('.craft').forEach(c=>c.onclick=()=>handCraft(c.dataset.recipe));
+  el.scrollTop=savedScroll;
+}
+function handCraft(id){
+  const rec=RECIPES[id];
+  if(!Object.keys(rec.in).every(k=>invCount(k)>=rec.in[k])){ notify('Missing ingredients','bad'); return; }
+  for(const k in rec.in) takeInv(k,rec.in[k]);
+  for(const k in rec.out) addInv(k,rec.out[k]);
+  renderInv(); refreshHotbar(); refreshResStrip();
+}
+
+// ----------------------------- UI: machine detail -----------------------------
+let selected=null, detailOpen=false, detailSig='';
+const DEP_ITEMS=['coal','iron-ore','copper-ore','stone','iron-plate','copper-plate',
+  'steel-plate','iron-gear-wheel','electronic-circuit','advanced-circuit','automation-science-pack',
+  'logistics-science-pack','production-science-pack','rocket-part'];
+
+function selectTile(tx,ty){
+  const b=buildingAt(tx,ty);
+  if(b && ['furnace','assembler','chest','lab','miner','generator','silo'].includes(b.type)){ selected=b; openDetail(); }
+  else { closeDetail(); }
+}
+function openDetail(){
+  detailOpen=true; detailSig='';
+  let el=document.getElementById('detail');
+  if(!el){ el=document.createElement('div'); el.className='panel'; el.id='detail'; document.body.appendChild(el); }
+  el.style.display='block'; refreshDetail();
+}
+function closeDetail(){ detailOpen=false; selected=null; detailSig='';
+  const el=document.getElementById('detail'); if(el)el.style.display='none'; }
+
+// The panel rebuilds its DOM only when structure changes (which machine,
+// which recipe, which items exist). Per-frame updates touch text/width only,
+// so buttons stay clickable and hover states survive.
+function detailSignature(b){
+  let s=b.type+'@'+b.x+','+b.y;
+  if(b.type==='furnace') s+='|'+(b.input.item||'-')+'|'+(b.out.item||'-')+'|'+unlocked.has('steel-plate');
+  if(b.type==='assembler') s+='|'+(b.recipe||'-')+'|'+(b.out.item||'-')+'|'+research.index;
+  if(b.type==='chest') s+='|'+Object.keys(b.store).filter(k=>b.store[k]>0).sort().join(',');
+  if(b.type==='lab') s+='|'+research.index;
+  if(b.type==='silo') s+='|'+b.launched;
+  return s;
+}
+function swp(item){ return item? `<span class="sw" style="background:${ITEMS[item].c}"></span>`
+  : '<span class="sw" style="background:#20262f"></span>'; }
+function vrow(label,item,vkey){ return `<div class="drow">${swp(item)}<span class="lb">${label}</span><span class="vl" data-v="${vkey}"></span></div>`; }
+function prow(pkey,col){ return `<div class="pbar"><i data-p="${pkey}" style="background:linear-gradient(90deg,${col}55,${col})"></i></div>`; }
+function mbtn(act,label,item){ const sw=item?`<span class="sw" style="background:${ITEMS[item].c}"></span>`:'';
+  return `<button class="mini" data-act="${act}"${item?` data-item="${item}"`:''}>${sw}${label}</button>`; }
+
+// Returns why a machine is or isn't working: {t:label, w:severity 0 ok /1 idle /2 critical}
+function machineStatus(b){
+  if(b.type==='assembler'){
+    if(!b.recipe) return {t:'Pick a recipe',w:1};
+    const rec=RECIPES[b.recipe], outName=Object.keys(rec.out)[0];
+    if(b.out.count>=OUT_CAP && b.out.item===outName) return {t:'Output full',w:1};
+    if(!Object.keys(rec.in).every(k=>(b.inputs[k]||0)>=rec.in[k])) return {t:'Needs ingredients',w:1};
+    if(powerEff<=0) return {t:'⚡ No power',w:2};
+    if(powerEff<1) return {t:'⚡ Low power',w:2};
+    return {t:'Working',w:0};
+  }
+  if(b.type==='furnace'){
+    if(!b.rec && b.input.count===0) return {t:'Needs ore/plates',w:1};
+    if(!b.electric && b.coal<=0 && b.fuelT<=0) return {t:'Out of fuel',w:2};
+    if(b.electric && powerEff<=0) return {t:'⚡ No power',w:2};
+    if(b.out.count>=OUT_CAP) return {t:'Output full',w:1};
+    return {t:'Smelting',w:0};
+  }
+  if(b.type==='lab'){
+    if(research.index>=TECHS.length) return {t:'Research done',w:0};
+    const tech=TECHS[research.index]; let has=false;
+    for(const ty in tech.cost) if(b.packs[ty]>0) has=true;
+    if(!has) return {t:'Needs science packs',w:1};
+    if(powerEff<=0) return {t:'⚡ No power',w:2};
+    if(powerEff<1) return {t:'⚡ Low power',w:2};
+    return {t:'Researching',w:0};
+  }
+  if(b.type==='miner'){
+    const t=terrainAt(b.x,b.y);
+    if(!t||!t.ore||t.amount<=0) return {t:'Patch depleted',w:1};
+    if(b.buffer>=MINER_BUF) return {t:'Buffer full',w:1};
+    if(b.electric && powerEff<=0) return {t:'⚡ No power',w:2};
+    return {t:'Mining',w:0};
+  }
+  if(b.type==='generator'){
+    if(b.solar) return {t:'Solar — always on',w:0};
+    if(b.on) return {t:'Running',w:0};
+    if(b.coal>0||b.fuelT>0) return {t:'Standby (no demand)',w:0};
+    return {t:'Out of fuel',w:2};
+  }
+  if(b.type==='silo'){
+    if(b.launched) return {t:'Launched',w:0};
+    if(b.parts>=ROCKET_REQ) return {t:'Ready to launch',w:0};
+    return {t:'Awaiting parts',w:1};
+  }
+  return {t:'',w:0};
+}
+
+function buildDetailHTML(b){
+  const title = b.item&&ITEMS[b.item]? ITEMS[b.item].name :
+    ({furnace:'Furnace',assembler:'Assembler',chest:'Wooden Chest',lab:'Lab',
+      miner:'Mining Drill',generator:'Steam Generator',silo:'Rocket Silo'})[b.type];
+  let body='';
+  if(['assembler','furnace','lab','miner','generator','silo'].includes(b.type))
+    body+=`<div class="mstat" data-v="mstat"></div>`;
+  if(b.type==='furnace'){
+    const steel=unlocked.has('steel-plate'), elec=b.electric;
+    body+=vrow('Smelting',null,'frec');
+    body+=vrow('Input',b.input.item,'fin');
+    if(!elec) body+=vrow('Fuel (coal)','coal','ffuel');
+    else body+=vrow('Power',null,'fpow');
+    body+=vrow('Output',b.out.item,'fout');
+    body+=prow('fp', elec?'#5ec2b0':'#ffb02e');
+    body+=`<div class="btnrow">`+(elec?'':mbtn('fuel','+10','coal'));
+    if(b.input.item) body+=mbtn('ore','+10',b.input.item);
+    else { body+=mbtn('ore','+10','iron-ore')+mbtn('ore','+10','copper-ore')+mbtn('ore','+10','stone');
+      if(steel) body+=mbtn('ore','+10','iron-plate'); }
+    body+=mbtn('takeout','Take output')+`</div>`;
+    body+=`<div style="font-size:10px;color:var(--faint);margin-top:8px">${elec?'Runs on power, no coal — 3× speed. ':'Feed by hand, or automate with inserters / a drill. '}${steel?'Smelt 5 iron plates → 1 steel.':''}</div>`;
+  } else if(b.type==='assembler'){
+    const avail=ASM_RECIPES.filter(id=>unlocked.has(id));
+    body+=`<div class="sect-title" style="margin-top:0">Recipe</div><div class="rchoose">`+
+      avail.map(id=>{ const on=b.recipe===id; const outName=Object.keys(RECIPES[id].out)[0];
+        return `<div class="rc ${on?'on':''}" data-r="${id}"><span class="sw" style="background:${ITEMS[outName].c}"></span>${ITEMS[outName].name}</div>`;
+      }).join('')+`</div>`;
+    if(b.recipe){ const rec=RECIPES[b.recipe];
+      body+=`<div class="sect-title">Inputs</div>`;
+      for(const k in rec.in) body+=vrow(ITEMS[k].name,k,'ain-'+k);
+      body+=vrow('Output',Object.keys(rec.out)[0],'aout');
+      body+=prow('ap','#4a90cf');
+      body+=`<div class="btnrow">`+mbtn('load','Load ingredients')+mbtn('takeout','Take output')+`</div>`;
+    } else body+=`<div style="font-size:10px;color:var(--faint);margin-top:8px">Pick a recipe, then feed it by hand or with inserters. Assemblers need power.</div>`;
+  } else if(b.type==='chest'){
+    const ks=Object.keys(b.store).filter(k=>b.store[k]>0).sort();
+    body+= ks.length? ks.map(k=>vrow(ITEMS[k].name,k,'cs-'+k)).join('')
+      : `<div style="font-size:11px;color:var(--faint)">Empty. Deposit below, or load it with inserters.</div>`;
+    body+=`<div class="sect-title" style="margin-top:10px">Deposit ×10</div>`;
+    body+=`<div class="btnrow">`+DEP_ITEMS.filter(k=>unlocked.has(k)||invCount(k)>0||['coal','iron-ore','copper-ore','stone'].includes(k)).map(k=>mbtn('dep','+10',k)).join('')+`</div>`;
+    body+=`<div class="btnrow">`+mbtn('wall','Withdraw all')+`</div>`;
+  } else if(b.type==='lab'){
+    const greenUnlocked=unlocked.has('logistics-science-pack');
+    const blueUnlocked=unlocked.has('production-science-pack');
+    body+=vrow('Red packs','automation-science-pack','lpr');
+    if(greenUnlocked) body+=vrow('Green packs','logistics-science-pack','lpg');
+    if(blueUnlocked) body+=vrow('Blue packs','production-science-pack','lpb');
+    body+=vrow('Researching',null,'lt');
+    body+=`<div class="btnrow">`+mbtn('packr','+5','automation-science-pack');
+    if(greenUnlocked) body+=mbtn('packg','+5','logistics-science-pack');
+    if(blueUnlocked) body+=mbtn('packb','+5','production-science-pack');
+    body+=`</div>`;
+    body+=`<div style="font-size:10px;color:var(--faint);margin-top:8px">Labs consume packs over time to advance research. Labs need power.</div>`;
+  } else if(b.type==='miner'){
+    body+=vrow('Facing',null,'mf');
+    body+=vrow('Mining',b.oreItem,'mb');
+    body+=vrow('Patch left',null,'mp');
+    if(b.electric) body+=vrow('Power',null,'mpow');
+    body+=`<div class="btnrow">`+mbtn('takebuf','Take buffer')+`</div>`;
+    if(b.electric) body+=`<div style="font-size:10px;color:var(--faint);margin-top:8px">Electric drills mine 2.5× faster but need power.</div>`;
+  } else if(b.type==='generator'){
+    if(b.solar){
+      body+=vrow('Output',null,'gout');
+      body+=`<div style="font-size:10px;color:var(--faint);margin-top:8px">Solar panels supply power for free — no fuel needed.</div>`;
+    } else {
+      body+=vrow('Status',null,'gst');
+      body+=vrow('Fuel (coal)','coal','gfuel');
+      body+=vrow('Output',null,'gout');
+      body+=`<div class="btnrow">`+mbtn('gfuel','+10','coal')+`</div>`;
+      body+=`<div style="font-size:10px;color:var(--faint);margin-top:8px">Burns coal to power electric machines. Only runs when power is demanded.</div>`;
+    }
+  } else if(b.type==='silo'){
+    if(b.launched){
+      body+=`<div style="font-size:12px;color:var(--green);margin:6px 0">✓ Rocket launched.</div>`;
+      body+=`<div style="font-size:10px;color:var(--faint)">The factory must grow.</div>`;
+    } else {
+      body+=vrow('Rocket parts','rocket-part','sp');
+      body+=prow('spp','#e0b040');
+      body+=`<div class="btnrow">`+mbtn('part','+5','rocket-part')+mbtn('launch','🚀 LAUNCH')+`</div>`;
+      body+=`<div style="font-size:10px;color:var(--faint);margin-top:8px">Deliver ${ROCKET_REQ} rocket parts, then launch to win.</div>`;
+    }
+  }
+  return `<div class="ph"><b>${title}</b><span class="x" id="dX">✕</span></div><div class="pb">${body}</div>`;
+}
+
+function refreshDetail(){
+  const el=document.getElementById('detail'); if(!el||!selected) return;
+  const b=selected, sig=detailSignature(b);
+  if(sig!==detailSig){
+    detailSig=sig; el.innerHTML=buildDetailHTML(b);
+    el.querySelector('#dX').onclick=closeDetail;
+    el.querySelectorAll('.rc').forEach(rc=>rc.onclick=()=>setAssemblerRecipe(b,rc.dataset.r));
+    el.querySelectorAll('[data-act]').forEach(btn=>btn.onclick=()=>detailAction(b,btn.dataset.act,btn.dataset.item));
+  }
+  updateDetailValues(el,b);
+}
+function setv(el,k,txt){ const n=el.querySelector(`[data-v="${k}"]`); if(n&&n.textContent!==txt)n.textContent=txt; }
+function setp(el,k,frac){ const n=el.querySelector(`[data-p="${k}"]`); if(n)n.style.width=Math.min(100,(frac||0)*100)+'%'; }
+function setoff(el,act,item,off){
+  el.querySelectorAll(`[data-act="${act}"]`).forEach(btn=>{
+    if(item===undefined || btn.dataset.item===item) btn.classList.toggle('off',off);
+  });
+}
+function updateDetailValues(el,b){
+  const statEl=el.querySelector('[data-v="mstat"]');
+  if(statEl){ const st=machineStatus(b);
+    statEl.textContent=st.t;
+    statEl.style.color = st.w===2? 'var(--red)' : st.w===1? 'var(--amber)' : 'var(--green)';
+  }
+  if(b.type==='furnace'){
+    setv(el,'frec', b.rec? ITEMS[Object.keys(RECIPES[b.rec].out)[0]].name : 'idle');
+    setv(el,'fin', b.input.count+' / '+FURN_IN);
+    if(b.electric) setv(el,'fpow', powerEff>=0.999?'full':(powerEff>0?Math.round(powerEff*100)+'%':'no power'));
+    else setv(el,'ffuel', b.coal+' / '+FURN_FUEL);
+    setv(el,'fout', b.out.count+' / '+OUT_CAP);
+    setp(el,'fp', b.prog);
+    if(!b.electric) setoff(el,'fuel',undefined, invCount('coal')===0 || b.coal>=FURN_FUEL);
+    ['iron-ore','copper-ore','stone','iron-plate'].forEach(o=>
+      setoff(el,'ore',o, invCount(o)===0 || b.input.count>=FURN_IN || (b.input.item&&b.input.item!==o)));
+    setoff(el,'takeout',undefined, b.out.count===0);
+  } else if(b.type==='assembler'){
+    if(b.recipe){ const rec=RECIPES[b.recipe];
+      for(const k in rec.in) setv(el,'ain-'+k,(b.inputs[k]||0)+' / '+(rec.in[k]*ASM_STACKS));
+      setv(el,'aout', b.out.count+' / '+OUT_CAP);
+      setp(el,'ap', b.prog);
+      const canLoad=Object.keys(rec.in).some(k=>invCount(k)>0 && (b.inputs[k]||0)<rec.in[k]*ASM_STACKS);
+      setoff(el,'load',undefined,!canLoad);
+      setoff(el,'takeout',undefined, b.out.count===0);
+    }
+  } else if(b.type==='chest'){
+    for(const k in b.store) setv(el,'cs-'+k, String(b.store[k]));
+    DEP_ITEMS.forEach(k=>setoff(el,'dep',k, invCount(k)===0));
+    setoff(el,'wall',undefined, Object.keys(b.store).every(k=>!b.store[k]));
+  } else if(b.type==='lab'){
+    setv(el,'lpr', b.packs.r+' / '+LAB_CAP);
+    setv(el,'lpg', b.packs.g+' / '+LAB_CAP);
+    setv(el,'lpb', b.packs.b+' / '+LAB_CAP);
+    setv(el,'lt', research.index>=TECHS.length? 'complete':TECHS[research.index].name);
+    setoff(el,'packr',undefined, invCount('automation-science-pack')===0 || b.packs.r>=LAB_CAP);
+    setoff(el,'packg',undefined, invCount('logistics-science-pack')===0 || b.packs.g>=LAB_CAP);
+    setoff(el,'packb',undefined, invCount('production-science-pack')===0 || b.packs.b>=LAB_CAP);
+  } else if(b.type==='miner'){
+    setv(el,'mf', DIRNAME[b.dir]);
+    setv(el,'mb', b.buffer+' / '+MINER_BUF+' buffered');
+    const t=terrainAt(b.x,b.y); setv(el,'mp', String(t?t.amount:0));
+    if(b.electric) setv(el,'mpow', powerEff>=0.999?'full':(powerEff>0?Math.round(powerEff*100)+'%':'no power'));
+    setoff(el,'takebuf',undefined, b.buffer===0);
+  } else if(b.type==='generator'){
+    if(b.solar){ setv(el,'gout', SOLAR_POWER+' kW'); }
+    else {
+      setv(el,'gst', b.on?'running':(b.coal>0||b.fuelT>0?'standby':'no fuel'));
+      setv(el,'gfuel', b.coal+' / '+FURN_FUEL);
+      setv(el,'gout', Math.round(GEN_POWER*genOutputMult)+' kW');
+      setoff(el,'gfuel',undefined, invCount('coal')===0 || b.coal>=FURN_FUEL);
+    }
+  } else if(b.type==='silo'){
+    if(!b.launched){
+      setv(el,'sp', b.parts+' / '+ROCKET_REQ);
+      setp(el,'spp', b.parts/ROCKET_REQ);
+      setoff(el,'part',undefined, invCount('rocket-part')===0 || b.parts>=ROCKET_REQ);
+      setoff(el,'launch',undefined, b.parts<ROCKET_REQ);
+    }
+  }
+}
+function detailAction(b,act,item){
+  if(act==='fuel'){ const n=Math.min(10,invCount('coal'),FURN_FUEL-b.coal);
+    if(n>0){ takeInv('coal',n); b.coal+=n; } }
+  else if(act==='ore'){ if(b.input.item && b.input.item!==item) return;
+    const n=Math.min(10,invCount(item),FURN_IN-b.input.count);
+    if(n>0){ takeInv(item,n); b.input.item=item; b.input.count+=n; } }
+  else if(act==='takeout'){ if(b.out && b.out.count>0){ addInv(b.out.item,b.out.count); b.out.item=null; b.out.count=0; } }
+  else if(act==='load' && b.recipe){ const rec=RECIPES[b.recipe];
+    for(const k in rec.in){ const n=Math.min(invCount(k), rec.in[k]*ASM_STACKS-(b.inputs[k]||0));
+      if(n>0){ takeInv(k,n); b.inputs[k]=(b.inputs[k]||0)+n; } } }
+  else if(act==='packr'){ const n=Math.min(5,invCount('automation-science-pack'),LAB_CAP-b.packs.r);
+    if(n>0){ takeInv('automation-science-pack',n); b.packs.r+=n; } }
+  else if(act==='packg'){ const n=Math.min(5,invCount('logistics-science-pack'),LAB_CAP-b.packs.g);
+    if(n>0){ takeInv('logistics-science-pack',n); b.packs.g+=n; } }
+  else if(act==='packb'){ const n=Math.min(5,invCount('production-science-pack'),LAB_CAP-b.packs.b);
+    if(n>0){ takeInv('production-science-pack',n); b.packs.b+=n; } }
+  else if(act==='gfuel'){ const n=Math.min(10,invCount('coal'),FURN_FUEL-b.coal);
+    if(n>0){ takeInv('coal',n); b.coal+=n; } }
+  else if(act==='part'){ const n=Math.min(5,invCount('rocket-part'),ROCKET_REQ-b.parts);
+    if(n>0){ takeInv('rocket-part',n); b.parts+=n; } }
+  else if(act==='launch'){ if(b.parts>=ROCKET_REQ && !b.launched){ b.launched=true; victory=true; showVictory(); } }
+  else if(act==='dep'){ const n=Math.min(10,invCount(item));
+    if(n>0){ takeInv(item,n); b.store[item]=(b.store[item]||0)+n; } }
+  else if(act==='wall'){ for(const k in b.store){ if(b.store[k]>0) addInv(k,b.store[k]); } b.store={}; }
+  else if(act==='takebuf'){ if(b.buffer>0 && b.oreItem){ addInv(b.oreItem,b.buffer); b.buffer=0; } }
+  refreshHotbar(); refreshResStrip();
+}
+function setAssemblerRecipe(a,id){
+  // return current inputs to inventory to avoid stuck items
+  for(const k in a.inputs){ addInv(k,a.inputs[k]); }
+  a.inputs={}; a.recipe=id; a.prog=0;
+  refreshHotbar(); refreshResStrip();
+}
+
+// ----------------------------- Panels: help / victory -----------------------------
+function toggleHelp(){
+  let el=document.getElementById('help');
+  if(el && el.style.display!=='none'){ el.style.display='none'; return; }
+  if(!el){ el=document.createElement('div'); el.className='overlay'; el.id='help';
+    el.innerHTML=`<div class="card">
+      <h1>COGWORKS</h1><div class="sub">Automation Engine · a Factorio-style builder</div>
+      <p>You dropped onto a resource-rich world with a starter kit. Mine ore, smelt it into plates, wire up assemblers, power the works with steam, and automate your way to a rocket launch. Every machine runs itself — your job is logistics.</p>
+      <p style="color:var(--amber)">The core loop: <b>Drill</b> ore → <b>Belt</b> it → <b>Inserter</b> feeds a <b>Furnace</b> (with coal) → belt the plates → <b>Assembler</b> builds parts → <b>Lab</b> eats science packs → research unlocks steel, three tiers of science (red · green · blue), <b>Splitters</b>, <b>Solar Panels</b>, an <b>Electric Furnace</b>, faster belts & more. Build a <b>Steam Generator</b> (coal) or <b>Solar Panel</b> to power electric buildings, then research <b>Rocketry</b>, build a <b>Rocket Silo</b>, and launch to win.</p>
+      <div class="keys">
+        <div><kbd>1</kbd>–<kbd>9</kbd> pick a building</div>
+        <div><kbd>X</kbd> bulldoze tool</div>
+        <div><kbd>R</kbd> rotate before placing</div>
+        <div><kbd>LMB</kbd> place / drag to paint belts</div>
+        <div><kbd>RMB</kbd> quick-remove (refunds)</div>
+        <div><kbd>MMB</kbd> drag to pan</div>
+        <div><kbd>WASD</kbd> / arrows pan</div>
+        <div><kbd>wheel</kbd> zoom</div>
+        <div><kbd>E</kbd> inventory &amp; hand-craft</div>
+        <div><kbd>Q</kbd>/<kbd>Esc</kbd> deselect / close</div>
+        <div><kbd>Space</kbd> pause</div>
+        <div><kbd>click</kbd> a machine to inspect</div>
+        <div><kbd>touch</kbd> tap to act · drag to pan</div>
+        <div><kbd>pinch</kbd> zoom · <kbd>⟳ ROT</kbd> rotate</div>
+        <div><kbd>map</kbd> click minimap to jump</div>
+        <div><kbd>⚙ WORLD</kbd> save · load · new map</div>
+      </div>
+      <p style="font-size:11px;color:var(--faint)">Tip: drills must sit on an ore patch. Furnaces need coal as fuel. Click an assembler to choose its recipe. Belts auto-corner when you drag.</p>
+      <button class="go" id="helpGo">Start building</button>
+    </div>`;
+    document.body.appendChild(el);
+    el.querySelector('#helpGo').onclick=()=>{ el.style.display='none'; };
+    el.addEventListener('click',ev=>{ if(ev.target===el) el.style.display='none'; });
+  } else el.style.display='flex';
+}
+function showVictory(){
+  const el=document.createElement('div'); el.className='overlay'; el.id='win';
+  el.innerHTML=`<div class="card">
+    <h1 style="color:var(--green);text-shadow:0 0 20px rgba(94,208,127,.4)">ROCKET LAUNCHED</h1>
+    <div class="sub">The rocket silo fired</div>
+    <p>Your factory grew from a single drill into a self-running machine — powering steam engines, smelting steel, and feeding a silo forty rocket parts. It just put a rocket into orbit. That's the classic Factorio win, and you built the whole supply chain to get there.</p>
+    <p style="color:var(--dim)">The factory keeps running. Keep expanding, optimizing throughput, or start fresh.</p>
+    <button class="go win" id="winGo">Keep playing</button>
+  </div>`;
+  document.body.appendChild(el);
+  el.querySelector('#winGo').onclick=()=>el.remove();
+  el.addEventListener('click',ev=>{ if(ev.target===el)el.remove(); });
+}
+function closeAllPanels(){ closeInv(); closeDetail();
+  if(typeof closeWorld==='function') closeWorld();
+  const h=document.getElementById('help'); if(h)h.style.display='none'; }
+
+// top buttons
+document.getElementById('btnRot').onclick=()=>{ placeDir=(placeDir+1)%4; updateReadout(); };
+document.getElementById('btnWorld').onclick=()=>toggleWorld();
+document.getElementById('btnPause').onclick=togglePause;
+document.getElementById('btnInv').onclick=toggleInv;
+document.getElementById('btnHelp').onclick=()=>toggleHelp();
+function togglePause(){ paused=!paused; document.getElementById('btnPause').classList.toggle('on',paused);
+  document.getElementById('btnPause').innerHTML=paused?'▶ RESUME':'⏸ PAUSE'; }
+
+// ----------------------------- Minimap -----------------------------
+const miniCv=document.getElementById('miniCv');
+const miniCtx=miniCv.getContext('2d');
+const miniBase=document.createElement('canvas');
+miniBase.width=WORLD_W; miniBase.height=WORLD_H;
+let miniFrame=0;
+const MINI_B={belt:'#7a6428',miner:'#d08a2f',furnace:'#d0703a',assembler:'#4a90cf',
+  inserter:'#b04848',chest:'#b98a4a',lab:'#9569cf',generator:'#c9a23a',silo:'#e0e6f0',
+  splitter:'#e0b84a'};
+function rebuildMiniBase(){
+  const g=miniBase.getContext('2d');
+  for(let y=0;y<WORLD_H;y++) for(let x=0;x<WORLD_W;x++){
+    const t=terrain[y][x];
+    g.fillStyle = t.water? '#0e1c30' : (t.ore&&t.amount>0)? shade(ITEMS[t.ore].c,-60) : '#12211a';
+    g.fillRect(x,y,1,1);
+  }
+  for(let y=0;y<WORLD_H;y++) for(let x=0;x<WORLD_W;x++){
+    const b=grid[y][x];
+    if(b){ g.fillStyle=MINI_B[b.type]||'#fff';
+      // 2px blobs so single machines still read at the scaled-down size
+      g.fillRect(Math.max(0,x-0.5),Math.max(0,y-0.5),2,2); }
+  }
+}
+function drawMini(){
+  miniCtx.clearRect(0,0,WORLD_W,WORLD_H);
+  miniCtx.drawImage(miniBase,0,0);
+  const z=cam.zoom;
+  const vx=(cam.x-W/(2*z))/TILE, vy=(cam.y-H/(2*z))/TILE;
+  const vw=W/(z*TILE), vh=H/(z*TILE);
+  // clamp the indicator to the map so it never spills past the minimap edges
+  const rx=Math.max(0,vx), ry=Math.max(0,vy);
+  const rx2=Math.min(WORLD_W,vx+vw), ry2=Math.min(WORLD_H,vy+vh);
+  miniCtx.strokeStyle='rgba(255,215,122,.95)'; miniCtx.lineWidth=1.5;
+  miniCtx.strokeRect(rx+0.75, ry+0.75, Math.max(1,rx2-rx-1.5), Math.max(1,ry2-ry-1.5));
+}
+let miniDrag=false;
+function miniJump(e){
+  const r=miniCv.getBoundingClientRect();
+  const cX=(e.touches&&e.touches[0])? e.touches[0].clientX : e.clientX;
+  const cY=(e.touches&&e.touches[0])? e.touches[0].clientY : e.clientY;
+  cam.x=Math.max(0,Math.min(WORLD_W,(cX-r.left)/r.width*WORLD_W))*TILE;
+  cam.y=Math.max(0,Math.min(WORLD_H,(cY-r.top)/r.height*WORLD_H))*TILE;
+}
+miniCv.addEventListener('mousedown',e=>{ miniDrag=true; miniJump(e); e.preventDefault(); });
+window.addEventListener('mousemove',e=>{ if(miniDrag) miniJump(e); });
+window.addEventListener('mouseup',()=>{ miniDrag=false; });
+miniCv.addEventListener('touchstart',e=>{ miniJump(e); e.preventDefault(); },{passive:false});
+miniCv.addEventListener('touchmove',e=>{ miniJump(e); e.preventDefault(); },{passive:false});
+
+// ----------------------------- Save / Load / New world -----------------------------
+const ORE_KEYS=[null,'iron-ore','copper-ore','coal','stone'];
+const ORE_IDX={'iron-ore':1,'copper-ore':2,'coal':3,'stone':4};
+
+function serializeB(b){
+  const o={type:b.type,x:b.x,y:b.y,dir:b.dir,item:b.item};
+  if(b.type==='belt') o.items=b.items.map(i=>[i.item,Math.round(i.pos*1000)/1000]);
+  else if(b.type==='splitter'){ o.buf=b.buffer; o.tog=b.toggle; }
+  else if(b.type==='miner'){ o.buf=b.buffer; o.ore=b.oreItem; }
+  else if(b.type==='furnace'){ o.ii=b.input.item; o.ic=b.input.count; o.coal=b.coal;
+    o.ft=b.fuelT; o.oi=b.out.item; o.oc=b.out.count; o.rec=b.rec; o.p=b.prog; }
+  else if(b.type==='assembler'){ o.recipe=b.recipe; o.inputs=Object.assign({},b.inputs);
+    o.oi=b.out.item; o.oc=b.out.count; o.p=b.prog; }
+  else if(b.type==='inserter'){ o.hold=b.holding; o.t=b.t; }
+  else if(b.type==='chest') o.store=Object.assign({},b.store);
+  else if(b.type==='lab'){ o.packs=Object.assign({},b.packs); o.timer=b.timer; }
+  else if(b.type==='generator'){ o.coal=b.coal; o.ft=b.fuelT; }
+  else if(b.type==='silo'){ o.parts=b.parts; o.launched=b.launched; }
+  return o;
+}
+function hydrateB(b,r){
+  switch(b.type){
+    case 'belt': b.items=(r.items||[]).map(a=>({item:a[0],pos:+a[1]||0})); break;
+    case 'splitter': b.buffer=r.buf||null; b.toggle=r.tog|0; break;
+    case 'miner': b.buffer=r.buf|0; if(r.ore)b.oreItem=r.ore; break;
+    case 'furnace': b.input.item=r.ii||null; b.input.count=r.ic|0; b.coal=r.coal|0;
+      b.fuelT=+r.ft||0; b.out.item=r.oi||null; b.out.count=r.oc|0; b.rec=r.rec||null; b.prog=+r.p||0; break;
+    case 'assembler': b.recipe=r.recipe||null; b.inputs=Object.assign({},r.inputs||{});
+      b.out.item=r.oi||null; b.out.count=r.oc|0; b.prog=+r.p||0; break;
+    case 'inserter': b.holding=r.hold||null; b.t=+r.t||0; break;
+    case 'chest': b.store=Object.assign({},r.store||{}); break;
+    case 'lab': b.packs=(r.packs&&typeof r.packs==='object')? {r:r.packs.r|0,g:r.packs.g|0,b:r.packs.b|0} : {r:0,g:0,b:0};
+      b.timer=+r.timer||0; break;
+    case 'generator': b.coal=r.coal|0; b.fuelT=+r.ft||0; break;
+    case 'silo': b.parts=r.parts|0; b.launched=!!r.launched; break;
+  }
+}
+function buildSaveObject(){
+  const amt=new Array(WORLD_W*WORLD_H), ore=new Array(WORLD_W*WORLD_H);
+  for(let y=0;y<WORLD_H;y++) for(let x=0;x<WORLD_W;x++){
+    const t=terrain[y][x], i=y*WORLD_W+x;
+    amt[i]=t.amount; ore[i]=t.ore? ORE_IDX[t.ore]:0;
+  }
+  const bs=[].concat(belts,miners,furnaces,assemblers,inserters,chests,labs,generators,silos,splitters).map(serializeB);
+  return {v:3, w:WORLD_W, h:WORLD_H, seed:worldSeed, amt, ore, b:bs,
+    inv:Object.assign({},inventory),
+    research:{index:research.index, prog:{r:research.prog.r,g:research.prog.g,b:research.prog.b}},
+    mults:[miningMult,logisticsMult,craftingMult,genOutputMult,smeltMult],
+    prod:Object.assign({},prodCount), total:totalProd, mi:mIndex,
+    victory, cam:{x:cam.x,y:cam.y,z:cam.zoom}};
+}
+function applySave(s){
+  if(!s || typeof s.seed!=='number' || !Array.isArray(s.b)) throw new Error('bad save');
+  if((s.v!==2 && s.v!==3) || s.w!==WORLD_W || s.h!==WORLD_H) throw new Error('old');
+  resetWorld(s.seed,false);
+  if(Array.isArray(s.amt)&&Array.isArray(s.ore)){
+    for(let y=0;y<WORLD_H;y++) for(let x=0;x<WORLD_W;x++){
+      const i=y*WORLD_W+x, t=terrain[y][x];
+      t.ore=ORE_KEYS[s.ore[i]]||null; t.amount=s.amt[i]|0;
+    }
+  }
+  for(const r of s.b){
+    if(!inWorld(r.x,r.y) || grid[r.y][r.x] || !listFor(r.type)) continue;
+    const b=makeBuilding(r.type,r.x,r.y,r.dir|0,r.item);
+    hydrateB(b,r);
+    grid[r.y][r.x]=b; listFor(r.type).push(b);
+  }
+  inventory=Object.assign({},s.inv||{});
+  const rp=(s.research&&s.research.prog)||{};
+  research={index:(s.research&&s.research.index)|0, prog:{r:rp.r|0, g:rp.g|0, b:rp.b|0}};
+  if(Array.isArray(s.mults)){ miningMult=+s.mults[0]||1; logisticsMult=+s.mults[1]||1;
+    craftingMult=+s.mults[2]||1; genOutputMult=+s.mults[3]||1; smeltMult=+s.mults[4]||1; }
+  prodCount=Object.assign({},s.prod||{}); totalProd=s.total|0; mIndex=s.mi|0; mAcc=0;
+  victory=!!s.victory;
+  recomputeUnlocked();
+  if(s.cam){ cam.x=+s.cam.x||cam.x; cam.y=+s.cam.y||cam.y; cam.zoom=+s.cam.z||1; }
+  prerenderGround(); // ore layout may differ from a pure regen after mining edits
+  lastStrip=''; lastResearch=''; lastObjective='';
+  buildHotbar(); refreshResStrip(); rebuildMiniBase();
+}
+function resetWorld(seed,fresh){
+  belts=[]; miners=[]; furnaces=[]; assemblers=[]; inserters=[]; chests=[]; labs=[];
+  generators=[]; silos=[]; splitters=[];
+  parts.length=0; closeAllPanels();
+  genWorld(seed);
+  if(fresh){
+    startingInventory();
+    research={index:0,prog:{r:0,g:0,b:0}};
+    miningMult=logisticsMult=craftingMult=genOutputMult=smeltMult=1; victory=false;
+    prodCount={}; totalProd=0; mIndex=0; mAcc=0;
+    unlocked=baseUnlocked();
+    cam.x=(WORLD_W>>1)*TILE; cam.y=(WORLD_H>>1)*TILE; cam.zoom=1;
+  }
+  const w=document.getElementById('win'); if(w)w.remove();
+  lastStrip=''; lastResearch=''; lastObjective='';
+  buildHotbar(); refreshResStrip(); rebuildMiniBase();
+}
+function saveGame(){
+  try{
+    const blob=new Blob([JSON.stringify(buildSaveObject())],{type:'application/json'});
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download='cogworks-save-'+(worldSeed>>>0)+'.json';
+    document.body.appendChild(a); a.click();
+    setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); },1000);
+    notify('Save downloaded','ok');
+  }catch(err){ notify('Save failed','bad'); }
+}
+document.getElementById('loadFile').addEventListener('change',ev=>{
+  const f=ev.target.files&&ev.target.files[0]; if(!f) return;
+  const rd=new FileReader();
+  rd.onload=()=>{
+    try{ applySave(JSON.parse(rd.result)); notify('Game loaded','ok'); closeWorld(); }
+    catch(err){ notify(err&&err.message==='old'? 'Save is from an older version — start a new world':'Could not read that save file','bad'); }
+  };
+  rd.readAsText(f); ev.target.value='';
+});
+
+// ----------------------------- World menu -----------------------------
+let worldOpen=false;
+function armBtn(btn,fn){
+  let armed=false;
+  btn.onclick=()=>{
+    if(!armed){ armed=true; btn.dataset.old=btn.textContent;
+      btn.textContent='Click again to confirm';
+      setTimeout(()=>{ armed=false; if(btn.dataset.old)btn.textContent=btn.dataset.old; },2500);
+    } else { armed=false; fn(); }
+  };
+}
+function toggleWorld(){
+  if(worldOpen){ closeWorld(); return; }
+  closeAllPanels(); worldOpen=true;
+  let el=document.getElementById('world');
+  if(!el){ el=document.createElement('div'); el.className='panel'; el.id='world'; document.body.appendChild(el); }
+  el.innerHTML=`<div class="ph"><b>World</b><span class="x" id="wX">✕</span></div>
+    <div class="pb">
+      <div class="wrow"><label>Seed</label><input class="winput" id="seedIn" value="${worldSeed}"></div>
+      <button class="wbtn" id="wSave">💾 Save game to file</button>
+      <button class="wbtn" id="wLoad">📂 Load game from file</button>
+      <button class="wbtn warn" id="wNew">✦ New random world</button>
+      <button class="wbtn warn" id="wSeed">Generate world from seed</button>
+      <div style="font-size:10px;color:var(--faint);margin-top:10px;line-height:1.6">
+        Saves download as a .json file — keep it anywhere and load it back any time.
+        New worlds discard unsaved progress; the same seed always builds the same map.</div>
+    </div>`;
+  el.style.display='block';
+  el.querySelector('#wX').onclick=closeWorld;
+  el.querySelector('#wSave').onclick=saveGame;
+  el.querySelector('#wLoad').onclick=()=>document.getElementById('loadFile').click();
+  armBtn(el.querySelector('#wNew'),()=>{
+    resetWorld((Math.random()*0x7fffffff)|0,true);
+    notify('New world · seed '+worldSeed,'ok'); closeWorld();
+  });
+  armBtn(el.querySelector('#wSeed'),()=>{
+    const v=el.querySelector('#seedIn').value;
+    resetWorld(seedFrom(v),true);
+    notify('World generated · seed '+worldSeed,'ok'); closeWorld();
+  });
+}
+function closeWorld(){ worldOpen=false;
+  const el=document.getElementById('world'); if(el)el.style.display='none'; }
+
+// ----------------------------- Boot -----------------------------
+function startingInventory(){
+  inventory={
+    'burner-mining-drill':6,'stone-furnace':6,'transport-belt':70,'inserter':18,
+    'assembling-machine':3,'wooden-chest':6,'lab':1,'steam-engine':2,
+    'coal':150,'iron-plate':70,'copper-plate':45,'iron-gear-wheel':24,'stone':60,'copper-cable':20,
+  };
+}
+
+function init(){
+  resize();
+  resetWorld((Math.random()*0x7fffffff)|0,true);
+  buildHotbar();
+  refreshResStrip();
+  updateReadout();
+  toggleHelp();       // show intro
+  let last=performance.now(), acc=0;
+  function frame(now){
+    const rdt=(now-last)/1000; last=now;
+    handlePan(rdt);
+    if(!paused){ acc+=Math.min(rdt,0.1); while(acc>=DT){ tick(); acc-=DT; } }
+    render(now/1000);
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+}
+init();
+</script>
+</body>
+</html>
